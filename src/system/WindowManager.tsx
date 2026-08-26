@@ -16,15 +16,44 @@ export type WindowState = {
   minH?: number
 }
 
+export type WindowManagerAPI = {
+  windows: WindowState[]
+  open: (app: AppDescriptor, opts?: { singleInstance?: boolean })=> string
+  close: (id:string)=>void
+  focus: (id:string)=>void
+  setPos: (id:string, x:number,y:number)=>void
+  setSize: (id:string, w:number,h:number,x?:number,y?:number)=>void
+  toggleMinimize: (id:string)=>void
+  toggleMaximize: (id:string)=>void
+}
+
 let nextWindowId = 1
 
-export default function useWindowManager(){
+export default function useWindowManager(): WindowManagerAPI{
   const [windows, setWindows] = useState<WindowState[]>([])
 
-  const open = useCallback((app: AppDescriptor)=>{
+  const open = useCallback((app: AppDescriptor, opts?: { singleInstance?: boolean })=>{
+    // Determine single-instance behavior: opts override registry metadata
+    const shouldSingle = opts?.singleInstance ?? app.singleInstance ?? false
+
+    if(shouldSingle){
+      const existing = windows.filter(w=> w.appId === app.id).reduce((a,b)=> a.z>b.z? a:b, null as WindowState | null)
+      if(existing){
+        // if minimized, restore
+        setWindows(ws=> ws.map(w=> w.id===existing.id ? {...w, minimized: false} : w))
+        // focus existing
+        setWindows(ws=>{
+          const top = ws.length? Math.max(...ws.map(w=>w.z)):1
+          return ws.map(w=> w.id===existing.id ? {...w, z: top+1} : w)
+        })
+        return existing.id
+      }
+    }
+
     const id = `win-${nextWindowId++}`
     setWindows(ws=>[...ws, { id, appId: app.id, title: app.name, x:80+ws.length*20, y:60+ws.length*20, w:520, h:360, z: (ws.length? Math.max(...ws.map(w=>w.z))+1:1), minW:300, minH:120 }])
-  },[])
+    return id
+  },[windows])
 
   const close = useCallback((id:string)=> setWindows(ws=>ws.filter(w=>w.id!==id)),[])
   const focus = useCallback((id:string)=> setWindows(ws=>{

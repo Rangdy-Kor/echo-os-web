@@ -6,11 +6,12 @@ export type AppDescriptor = {
   name: string
   icon?: React.ReactNode
   component: React.ComponentType<any>
+  singleInstance?: boolean
 }
 
 const apps: AppDescriptor[] = [
-  { id: 'about', name: 'About', component: AboutApp },
-  { id: 'files', name: 'Files', component: FilesApp },
+  { id: 'about', name: 'About', component: AboutApp, singleInstance: true },
+  { id: 'files', name: 'Files', component: FilesApp, singleInstance: true },
 ]
 
 export function getApps(){

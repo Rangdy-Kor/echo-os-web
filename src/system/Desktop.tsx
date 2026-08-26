@@ -2,6 +2,7 @@ import React, { useRef, useEffect } from 'react'
 import useWindowManager from './WindowManager'
 import Window from './Window'
 import Taskbar from './Taskbar'
+import { WindowManagerProvider } from './WindowManagerContext'
 import { getApps, findApp } from '../apps/registry'
 
 export default function Desktop(){
@@ -39,28 +40,30 @@ export default function Desktop(){
   }
 
   return (
-    <div className="desktop">
-      <div ref={wallpaperRef} className="wallpaper" style={{position:'absolute',inset:0,background:'transparent'}} onPointerDown={onDesktopPointerDown} />
-      <div className="window-layer">
-        {wm.windows.map(w=>{
-          const app = findApp(w.appId)
-          const Comp = app?.component
-          return (
-            <Window key={w.id} state={w} onClose={wm.close} onFocus={wm.focus} onMove={wm.setPos} onResize={wm.setSize} onMinimize={wm.toggleMinimize} onMaximize={wm.toggleMaximize}>
-              {Comp ? <Comp /> : <div>App not found</div>}
-            </Window>
-          )
-        })}
-      </div>
-
-      <div className="system-bar">
-        <div style={{display:'flex',alignItems:'center'}}>
-          {/* Taskbar */}
-          <Taskbar apps={apps} wm={wm} />
+    <WindowManagerProvider value={wm}>
+      <div className="desktop">
+        <div ref={wallpaperRef} className="wallpaper" style={{position:'absolute',inset:0,background:'transparent'}} onPointerDown={onDesktopPointerDown} />
+        <div className="window-layer">
+          {wm.windows.map(w=>{
+            const app = findApp(w.appId)
+            const Comp = app?.component
+            return (
+              <Window key={w.id} state={w} onClose={wm.close} onFocus={wm.focus} onMove={wm.setPos} onResize={wm.setSize} onMinimize={wm.toggleMinimize} onMaximize={wm.toggleMaximize}>
+                {Comp ? <Comp /> : <div>App not found</div>}
+              </Window>
+            )
+          })}
         </div>
-        <div style={{flex:1}} />
-        <div style={{color:'var(--muted)'}}>Echo OS</div>
+
+        <div className="system-bar">
+          <div style={{display:'flex',alignItems:'center'}}>
+            {/* Taskbar */}
+            <Taskbar apps={apps} wm={wm} />
+          </div>
+          <div style={{flex:1}} />
+          <div style={{color:'var(--muted)'}}>Echo OS</div>
+        </div>
       </div>
-    </div>
+    </WindowManagerProvider>
   )
 }
