@@ -11,6 +11,12 @@ export default function FilesApp(){
   const [backStack, setBackStack] = useState<string[][]>([])
   const [forwardStack, setForwardStack] = useState<string[][]>([])
 
+  // selection state: single-item selection by name within current directory
+  const [selected, setSelected] = useState<string | null>(null)
+
+  // root ref to allow sizing to fill parent .content area
+  const rootRef = useRef<HTMLDivElement | null>(null)
+
   const node = findEntry(cwd.length?cwd:[''], vfs) as VEntry | null
   const children = node && node.type==='dir' ? node.children ?? [] : []
 
@@ -26,6 +32,8 @@ export default function FilesApp(){
     setBackStack(bs => [...bs, snapshot])
     setForwardStack([])
     setCwd(prev => [...prev, name])
+    // clear selection when navigating into a directory
+    setSelected(null)
   }
 
   function up(){
@@ -35,6 +43,7 @@ export default function FilesApp(){
     setBackStack(bs => [...bs, snapshot])
     setForwardStack([])
     setCwd(prev => prev.slice(0, -1))
+    setSelected(null)
   }
 
   function goBack(){
@@ -44,6 +53,7 @@ export default function FilesApp(){
       // push current cwd into forward stack using the ref snapshot
       setForwardStack(fs => [...fs, cwdRef.current.slice()])
       setCwd(prev)
+      setSelected(null)
       return bs.slice(0, -1)
     })
   }
@@ -54,12 +64,62 @@ export default function FilesApp(){
       const next = fs[fs.length - 1]
       setBackStack(bs => [...bs, cwdRef.current.slice()])
       setCwd(next)
+      setSelected(null)
       return fs.slice(0, -1)
     })
   }
 
+  // Clicking inside the file list: determine whether a li was clicked.
+  // If a li (or a descendant) was clicked, select that item. Otherwise clear selection.
+  function onFileListClick(e: React.MouseEvent){
+    const target = e.target as HTMLElement | null
+    if(!target) { setSelected(null); return }
+    const li = target.closest && target.closest('li') as HTMLElement | null
+    // li must be a child of the current UL (defensive)
+    if(li && (e.currentTarget as HTMLElement).contains(li)){
+      const name = li.getAttribute('data-name')
+      if(name) setSelected(name)
+      return
+    }
+    setSelected(null)
+  }
+
+  // ensure the FilesApp root fills the parent .content area so clicks on the
+  // empty region reach this component. We use a ResizeObserver on the
+  // closest ancestor with class 'content' and set the root div height accordingly.
+  useEffect(() => {
+    const root = rootRef.current
+    if(!root) return
+    const contentEl = root.closest && (root.closest('.content') as HTMLElement | null)
+    if(!contentEl) return
+
+    // set initial height
+    root.style.height = `${contentEl.clientHeight}px`
+    root.style.boxSizing = 'border-box'
+
+    const ro = new ResizeObserver(()=>{
+      if(root && contentEl)
+        root.style.height = `${contentEl.clientHeight}px`
+    })
+    ro.observe(contentEl)
+
+    return ()=> ro.disconnect()
+  }, [])
+
+  // Root-level click: handle clicks that occur outside .file-list (e.g., the empty area below the list)
+  function onRootClick(e: React.MouseEvent){
+    const target = e.target as HTMLElement | null
+    if(!target) return
+    // ignore clicks inside toolbar
+    if(target.closest && target.closest('.files-nav')) return
+    // if click is inside the file-list area, let the ul handler manage selection
+    if(target.closest && target.closest('.file-list')) return
+    // otherwise clear selection
+    setSelected(null)
+  }
+
   return (
-    <div>
+    <div ref={rootRef} onClick={onRootClick} style={{display:'flex',flexDirection:'column'}}>
       <h3>Files</h3>
       <div style={{display:'flex',alignItems:'center',gap:8}}>
         <div className="files-nav">
@@ -70,11 +130,16 @@ export default function FilesApp(){
         <div style={{marginLeft:8,color:'var(--muted)'}}>Path: /{cwd.join('/')}</div>
       </div>
 
-      <ul className="file-list" style={{marginTop:8}}>
+      <ul className="file-list" style={{marginTop:8}} onClick={onFileListClick}>
         {children.map(c=> (
-            <li key={c.name} onDoubleClick={(e)=>{ e.preventDefault(); try{ document.getSelection()?.removeAllRanges() }catch{}; if(c.type==='dir') enter(c.name) }}>
-            {c.type==='dir' ? '📁' : '📄'} {c.name}
-          </li>
+            <li
+              key={c.name}
+              data-name={c.name}
+              className={selected === c.name ? 'selected' : ''}
+              onDoubleClick={(e)=>{ e.preventDefault(); try{ document.getSelection()?.removeAllRanges() }catch{}; if(c.type==='dir') enter(c.name) }}
+            >
+              {c.type==='dir' ? '📁' : '📄'} {c.name}
+            </li>
         ))}
       </ul>
     </div>
