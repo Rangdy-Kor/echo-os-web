@@ -27,6 +27,17 @@ body{margin:0;background:linear-gradient(180deg,var(--bg),#071019);color:var(--t
 .file-list li:hover{background:rgba(255,255,255,0.03)}
 .file-list li.selected{background:linear-gradient(135deg, rgba(95,234,212,0.12), rgba(96,165,250,0.04));box-shadow:inset 0 0 0 1px rgba(255,255,255,0.02);}
 .file-list li.selected:hover{background:linear-gradient(135deg, rgba(95,234,212,0.16), rgba(96,165,250,0.06));}
+
+/* Limit text selection suppression to Files app navigation UI only */
+.files-app .files-nav,
+.files-app .files-path,
+.files-app .file-list,
+.files-app h3 {
+  -webkit-user-select: none; /* Safari */
+  -moz-user-select: none; /* Firefox */
+  -ms-user-select: none; /* IE10+ */
+  user-select: none; /* Standard */
+}
 /* Files app navigation */
 .files-nav .button{margin-right:6px}
 .files-nav .button:disabled{opacity:0.4;cursor:default}

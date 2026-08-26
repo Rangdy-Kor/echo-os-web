@@ -119,7 +119,7 @@ export default function FilesApp(){
   }
 
   return (
-    <div ref={rootRef} onClick={onRootClick} style={{display:'flex',flexDirection:'column'}}>
+    <div ref={rootRef} className="files-app" onClick={onRootClick} style={{display:'flex',flexDirection:'column'}}>
       <h3>Files</h3>
       <div style={{display:'flex',alignItems:'center',gap:8}}>
         <div className="files-nav">
@@ -127,7 +127,7 @@ export default function FilesApp(){
           <button className="button" onClick={goForward} disabled={forwardStack.length===0}>Forward ▶</button>
           <button className="button" onClick={up} disabled={cwd.length===0}>Up</button>
         </div>
-        <div style={{marginLeft:8,color:'var(--muted)'}}>Path: /{cwd.join('/')}</div>
+        <div className="files-path" style={{marginLeft:8,color:'var(--muted)'}}>Path: /{cwd.join('/')}</div>
       </div>
 
       <ul className="file-list" style={{marginTop:8}} onClick={onFileListClick}>
@@ -136,6 +136,7 @@ export default function FilesApp(){
               key={c.name}
               data-name={c.name}
               className={selected === c.name ? 'selected' : ''}
+              onMouseDown={(e)=>{ if ((e as React.MouseEvent).detail > 1) { e.preventDefault() } }}
               onDoubleClick={(e)=>{ e.preventDefault(); try{ document.getSelection()?.removeAllRanges() }catch{}; if(c.type==='dir') enter(c.name) }}
             >
               {c.type==='dir' ? '📁' : '📄'} {c.name}
