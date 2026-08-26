@@ -1,0 +1,37 @@
+:root{
+  --bg: #0e1117;
+  --panel: #0f1720;
+  --accent: #5eead4;
+  --text: #e6eef8;
+  --muted: #9aa7b2;
+  --radius: 8px;
+  --shadow: 0 6px 18px rgba(0,0,0,0.45);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+}
+html,body,#root{height:100%;}
+body{margin:0;background:linear-gradient(180deg,var(--bg),#071019);color:var(--text);}
+
+/* basic layout */
+.app-root{height:100%;display:flex;flex-direction:column}
+.desktop{flex:1;position:relative;overflow:hidden}
+.system-bar{position:fixed;left:0;right:0;bottom:0;height:48px;background:rgba(15,20,32,0.85);display:flex;align-items:center;padding:0 12px;gap:12px;box-shadow:var(--shadow)}
+.launcher{display:flex;gap:8px}
+.window-layer{position:absolute;inset:0;pointer-events:none}
+.window{position:absolute;min-width:300px;min-height:120px;background:var(--panel);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;color:var(--text);pointer-events:auto}
+.window .titlebar{height:36px;display:flex;align-items:center;gap:8px;padding:0 8px;background:linear-gradient(0deg, rgba(255,255,255,0.02), transparent)}
+.window .content{padding:12px}
+.button{background:transparent;border:none;color:var(--text);cursor:pointer}
+.app-icon{width:28px;height:28px;border-radius:6px;background:linear-gradient(135deg,var(--accent),#60a5fa);display:inline-block}
+.file-list{list-style:none;padding:0;margin:0}
+.file-list li{padding:6px 8px;border-radius:6px;color:var(--text);cursor:pointer}
+.file-list li:hover{background:rgba(255,255,255,0.03)}
+
+/* taskbar item states */
+.task-item{display:flex;align-items:center;gap:6px;padding:6px 8px;border-radius:6px;cursor:pointer;position:relative}
+.task-item .running-dot{position:absolute;right:6px;bottom:6px;width:8px;height:8px;border-radius:50%;background:var(--accent);opacity:0.8}
+.task-item.focused{background:linear-gradient(135deg, rgba(95,234,212,0.14), rgba(96,165,250,0.06));box-shadow:inset 0 0 0 1px rgba(255,255,255,0.02)}
+.task-item.minimized{opacity:0.6;box-shadow:none;border:1px dashed rgba(255,255,255,0.02)}
+
+.task-menu{background:var(--panel);border-radius:6px;padding:6px;box-shadow:var(--shadow);min-width:120px}
+.task-menu-item{padding:8px;border-radius:6px;cursor:pointer}
+.task-menu-item:hover{background:rgba(255,255,255,0.02)}
