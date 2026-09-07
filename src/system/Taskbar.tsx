@@ -10,7 +10,7 @@ type WM = {
   close: (id:string)=>void
 }
 
-export default function Taskbar({ apps, wm }: { apps: AppDescriptor[], wm: WM }){
+export default function Taskbar({ apps, wm, showApplicationLaunchers = true }: { apps: AppDescriptor[], wm: WM, showApplicationLaunchers?: boolean }){
   const { windows } = wm
   const containerRef = useRef<HTMLDivElement | null>(null)
   const menuRef = useRef<HTMLDivElement | null>(null)
@@ -41,6 +41,9 @@ export default function Taskbar({ apps, wm }: { apps: AppDescriptor[], wm: WM })
     const topZ = windows.length? Math.max(...windows.map(w=>w.z)): -Infinity
     return win.z === topZ
   }
+
+  const genericWindows = windows.filter(w=> !w.appId)
+  const taskbarWindows = showApplicationLaunchers ? genericWindows : windows
 
   // pointer handling to prevent selection and to contain pointer events within taskbar
   useEffect(()=>{
@@ -90,7 +93,7 @@ export default function Taskbar({ apps, wm }: { apps: AppDescriptor[], wm: WM })
 
   return (
     <div ref={containerRef} style={{display:'flex',alignItems:'center',gap:8}}>
-      {apps.map(a=>{
+      {showApplicationLaunchers && apps.map(a=>{
         const top = topWindowForApp(a.id)
         const running = !!top
         const minimized = !!top && top!.minimized
@@ -122,6 +125,33 @@ export default function Taskbar({ apps, wm }: { apps: AppDescriptor[], wm: WM })
             <span className="app-icon" />
             {/* subtle indicator for running */}
             { running && !focused && !minimized && <span className="running-dot"/> }
+          </div>
+        )
+      })}
+
+      {taskbarWindows.map(win=>{
+        const focused = !win.minimized && isFocused(win)
+        const cls = ['task-item']
+        if(focused) cls.push('focused')
+        if(win.minimized) cls.push('minimized')
+
+        return (
+          <div
+            key={win.id}
+            className={cls.join(' ')}
+            onClick={(e)=>{
+              e.stopPropagation()
+              if(win.minimized) wm.toggleMinimize(win.id)
+              wm.focus(win.id)
+            }}
+            onContextMenu={(e)=>{
+              e.preventDefault(); e.stopPropagation()
+              const rect = (e.currentTarget as Element).getBoundingClientRect()
+              setMenu({ anchorRect: rect, winId: win.id })
+            }}
+            title={win.title}
+          >
+            <span className="app-icon" />
           </div>
         )
       })}

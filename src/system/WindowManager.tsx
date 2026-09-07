@@ -3,7 +3,8 @@ import { AppDescriptor } from '../apps/registry'
 
 export type WindowState = {
   id: string
-  appId: string
+  appId?: string
+  initialPath?: string[]
   title: string
   x:number
   y:number
@@ -19,6 +20,8 @@ export type WindowState = {
 export type WindowManagerAPI = {
   windows: WindowState[]
   open: (app: AppDescriptor, opts?: { singleInstance?: boolean })=> string
+  openGeneric: (title?: string)=> string
+  attachApplication: (windowId: string, appId: string, title?: string, initialPath?: string[])=>void
   close: (id:string)=>void
   focus: (id:string)=>void
   setPos: (id:string, x:number,y:number)=>void
@@ -55,6 +58,29 @@ export default function useWindowManager(): WindowManagerAPI{
     return id
   },[windows])
 
+  const openGeneric = useCallback((title = 'Workspace')=>{
+    const id = `win-${nextWindowId++}`
+    setWindows(ws=>[...ws, {
+      id,
+      title,
+      x:80+ws.length*20,
+      y:60+ws.length*20,
+      w:520,
+      h:360,
+      z: (ws.length? Math.max(...ws.map(w=>w.z))+1:1),
+      minW:300,
+      minH:120,
+    }])
+    return id
+  },[])
+
+  const attachApplication = useCallback((windowId: string, appId: string, title?: string, initialPath?: string[])=>{
+    setWindows(ws=> ws.map(win=> win.id === windowId
+      ? { ...win, appId, title: title ?? win.title, initialPath }
+      : win
+    ))
+  },[])
+
   const close = useCallback((id:string)=> setWindows(ws=>ws.filter(w=>w.id!==id)),[])
   const focus = useCallback((id:string)=> setWindows(ws=>{
     const top = ws.length? Math.max(...ws.map(w=>w.z)):1
@@ -66,5 +92,5 @@ export default function useWindowManager(): WindowManagerAPI{
   const toggleMinimize = useCallback((id:string)=> setWindows(ws=> ws.map(w=> w.id===id?{...w, minimized: !w.minimized}:w)),[])
   const toggleMaximize = useCallback((id:string)=> setWindows(ws=> ws.map(w=> w.id===id?{...w, maximized: !w.maximized}:w)),[])
 
-  return { windows, open, close, focus, setPos, setSize, toggleMinimize, toggleMaximize }
+  return { windows, open, openGeneric, attachApplication, close, focus, setPos, setSize, toggleMinimize, toggleMaximize }
 }

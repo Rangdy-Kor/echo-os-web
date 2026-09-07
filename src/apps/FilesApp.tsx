@@ -1,9 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { getInitialVfs, findEntry, VEntry } from '../vfs/vfs'
 
-export default function FilesApp(){
+export default function FilesApp({ initialPath = [] }: { initialPath?: string[] }){
   const [vfs] = useState(getInitialVfs)
-  const [cwd, setCwd] = useState<string[]>(([]))
+  const [cwd, setCwd] = useState<string[]>(() => initialPath.slice())
   const cwdRef = useRef<string[]>(cwd)
   useEffect(() => { cwdRef.current = cwd }, [cwd])
 
