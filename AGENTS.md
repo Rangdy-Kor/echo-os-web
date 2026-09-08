@@ -2,22 +2,212 @@
 
 ## Project Overview
 
-This project is an interactive web-based concept operating system created as a personal creative work.
+Echo OS is an interactive web-based concept operating system created as a
+personal creative project.
 
-The goal is not to build a real operating system. The goal is to create a convincing and coherent desktop environment that users can interact with through a web browser.
+It is not an attempt to implement a real operating system kernel or reproduce
+an existing desktop environment in a browser.
 
-The project should feel like a small, independent operating system rather than a conventional website or dashboard.
+Echo OS is a design experiment built around the following question:
 
-The final result should prioritize:
+> What if we step away from the assumption that a desktop operating system
+> must be application-centric, and instead design the environment around the
+> user's work?
 
-- Coherent UX
-- Visual consistency
-- Interactive behavior
-- Clear system architecture
-- High-quality polish
-- A distinctive identity
+The project explores how an operating environment can reduce the amount of
+attention users spend operating the OS and its applications, allowing them to
+focus more directly on what they actually want to work on.
 
-Do not add features merely because they are technically interesting. Every feature should contribute to the experience of the concept operating system.
+A useful guiding principle is:
+
+> Focus on what the user wants to do with the operating system, rather than
+> on using the operating system itself.
+
+This is an exploratory prototype. Do not assume that the current interaction
+model is final. New abstractions should be justified by observed needs in the
+prototype rather than designed speculatively.
+
+
+## Core Design Direction
+
+Traditional desktop environments often expose applications as the primary
+entry point:
+
+Intent
+→ Application
+→ Window
+→ File or Content
+→ Work
+
+Echo OS is currently exploring a different flow:
+
+Intent
+→ Surface
+→ Item
+→ Application / Capability
+→ Work
+
+This does NOT mean that applications should be removed.
+
+Applications remain useful implementation units and capability providers.
+The experiment is whether they need to remain the primary user-facing
+organizational unit.
+
+When making UX or architecture decisions, preserve this distinction between:
+
+- internal system structure
+- user-facing interaction structure
+
+They do not need to be identical.
+
+
+## Current Conceptual Model
+
+The project currently uses or explores the following concepts.
+
+### Surface
+
+Surface is a transient invocation and discovery interface.
+
+It can expose:
+
+- Items
+- Applications
+- Actions
+- Recent Items
+
+Surface is NOT an Application Launcher.
+
+Do not turn it into an application grid, Start menu, or conventional command
+palette by default.
+
+When the query is empty, Surface currently prioritizes recent Items.
+
+When the user searches, Item, Application, and Action results may be shown
+through the same interface.
+
+Avoid duplicate intents. For example, if an Application result already opens
+About, do not also expose an "Open About" Action merely as an alias.
+
+
+### Item
+
+An Item represents something the user can work with or act on.
+
+The current prototype primarily maps Items to VFS files and directories, but
+the concept should not be unnecessarily restricted to traditional files.
+
+An Item is not conceptually owned by an Application.
+
+Applications may operate on Items.
+
+Current execution policy is intentionally small:
+
+- directory → Files
+- `.txt` file → Text Viewer
+- unsupported file → no execution
+
+Do not introduce MIME systems, handler registries, Open With systems, or
+generalized capability frameworks until the prototype actually requires them.
+
+
+### Application
+
+Applications are capability and implementation units.
+
+They do not necessarily need to be directly launchable by the user.
+
+For example, Text Viewer exists as an Application internally but is currently
+hidden from Surface because it is invoked through a text Item.
+
+Do not assume:
+
+Application = launcher entry = Window owner
+
+These may coincide in some cases, but Echo OS deliberately does not treat them
+as universally equivalent.
+
+
+### Window
+
+A Window is part of the workspace/spatial environment.
+
+A Window does not have to belong permanently to an Application.
+
+The current Window model therefore allows `appId` to be absent and supports
+Generic Windows that can later have an Application attached.
+
+Preserve this property unless there is a deliberate design decision to change
+it.
+
+Do not regress toward an architecture where every Window must be created and
+owned by an Application.
+
+
+### Workspace and Tab
+
+Workspace and Tab are conceptual directions, not completed systems.
+
+The rough spatial model under exploration is:
+
+Workspace
+→ Window
+→ Tab
+
+Do not implement a Workspace or Tab architecture merely because these concepts
+are documented.
+
+They should only be introduced when a concrete interaction requires them.
+
+
+## Current Interaction Model
+
+The current prototype supports this important interaction path:
+
+Surface
+→ Item
+→ shared Item execution policy
+→ appropriate Application / capability
+→ Window
+
+Item execution is centralized at the Desktop/system level.
+
+Both Surface and Files use the same Item execution policy for files.
+
+Files must not know that `.txt` means Text Viewer.
+
+Likewise, Surface must not independently duplicate Item execution rules.
+
+Context-specific navigation is allowed.
+
+For example:
+
+- Surface → directory opens that directory in Files.
+- Files → directory double-click navigates within the existing Files Window.
+
+Do not force these interactions to behave identically merely for architectural
+uniformity.
+
+
+## Recent
+
+Recent is currently Item-centric.
+
+The intended prototype rule is:
+
+> Recent = Items that were successfully executed through the shared Item
+> execution path.
+
+Recent is NOT currently:
+
+- recent Applications
+- recent Windows
+- Files navigation history
+- general activity history
+
+Keep Recent small and simple unless later testing shows that this definition
+needs to change.
+
 
 ## Technology
 
@@ -32,213 +222,272 @@ Prefer native React and CSS implementations over large UI frameworks.
 
 Use additional dependencies only when they provide clear value.
 
-Use TypeScript strictly and avoid `any` unless there is a strong technical reason.
+Use TypeScript strictly.
+
+Avoid `any` unless there is a strong technical reason.
+
 
 ## Architecture
 
-Organize the application around these concepts:
+Keep system-level behavior separate from individual Applications.
+
+Current major implementation areas include:
 
 - Desktop
+- Universal Surface
 - Window System
 - Application Registry
 - Applications
 - Virtual File System
-- System State
-- Theme
+- Item execution
+- Taskbar
+- System-level state
 
-The architecture should separate operating-system-level behavior from individual applications.
+The architecture should support the concept rather than dictate it.
 
-### Desktop
+Do not expose an internal implementation concept in the UI merely because it
+exists in the architecture.
 
-The Desktop manages the overall environment, including:
-
-- Wallpaper
-- System bar
-- Application launcher
-- Running applications
-- Notifications
-- Desktop-level interactions
-
-### Window System
-
-All applications run inside a shared Window system.
-
-Windows should be designed to support:
-
-- Open
-- Close
-- Focus
-- Move
-- Minimize
-- Maximize
-- Restore
-
-Window behavior should be implemented centrally rather than independently inside each application.
 
 ### Application Registry
 
-Applications should be registered through a centralized registry.
+Applications are registered through a centralized registry.
 
-An application should have a stable identifier and metadata such as:
+An Application may have metadata such as:
 
 - ID
 - Name
 - Icon
 - Component
-- Capabilities, when necessary
+- Surface visibility
 
-Applications should not directly manipulate unrelated applications or global UI state.
+Registry membership does not imply that an Application must appear as a
+directly launchable Surface result.
+
 
 ### Virtual File System
 
 The project must not depend on the user's real file system.
 
-Use an in-memory or browser-persisted virtual file system.
+The VFS currently represents files, directories, paths, and content for the
+prototype.
 
-The virtual file system should represent:
+Keep VFS logic independent from the Files UI.
 
-- Files
-- Directories
-- Paths
-- File metadata
+The current VFS state model is intentionally simple and is not yet a fully
+shared persistent filesystem.
 
-Keep the file system implementation independent from the File Manager UI.
+Do not redesign VFS state management unless a feature creates a concrete need
+for shared state.
+
 
 ## State Management
 
 Keep state as close as possible to the component or system that owns it.
 
-Use global state only for genuinely global concerns such as:
-
-- Window management
-- System settings
-- Virtual file system
-- Application registry
+Promote state only when multiple parts of the system genuinely need shared
+ownership.
 
 Do not introduce global state simply for convenience.
 
-If state management becomes complex, prefer a small dedicated store rather than passing large amounts of state through unrelated components.
+Do not add a state-management library unless the existing React model has
+become a concrete limitation.
+
 
 ## UI and Design
 
-The interface should feel like a complete operating system.
+Echo OS should feel coherent as an operating environment, but visual fidelity
+to existing desktop operating systems is not the primary goal.
 
-Avoid copying Windows, macOS, or Linux interfaces directly.
+Windows, macOS, Linux, browsers, launchers, and other interfaces may be used
+as references.
 
-Existing operating systems may be used as UX references, but the final interface should have its own visual identity.
+Do not copy their interaction models automatically.
+
+For every familiar desktop convention, ask whether it supports the current
+Echo OS concept before reproducing it.
 
 Maintain consistent:
 
-- Spacing
-- Typography
-- Colors
-- Border radius
-- Shadows
-- Icons
-- Animation
-- Interaction patterns
+- spacing
+- typography
+- colors
+- border radius
+- shadows
+- icons
+- animation
+- interaction patterns
 
-Use CSS variables/design tokens for values shared across the interface.
+Use shared CSS variables or design tokens where appropriate.
 
-Avoid hardcoding the same visual values throughout many components.
+Avoid unnecessary visual complexity.
+
+The interface should emphasize the user's content and work rather than system
+chrome.
+
 
 ## Component Design
 
-Components should have one clear responsibility.
+Components should have clear responsibilities.
 
 Prefer composition over large monolithic components.
 
-Avoid components that contain unrelated business logic, state management, and presentation all at once.
+Extract shared logic when real duplication or shared responsibility appears.
 
-When a component becomes difficult to understand, consider extracting a smaller component.
+Do not create abstractions merely because they may become useful later.
 
-Do not create abstractions prematurely.
+A small amount of duplication or explicit policy is preferable to a premature
+framework.
+
 
 ## Development Rules
 
 Before modifying existing code:
 
 1. Inspect the relevant files.
-2. Understand the existing architecture.
-3. Reuse existing components and utilities when appropriate.
-4. Make the smallest reasonable change.
-5. Check for regressions.
+2. Understand the current behavior.
+3. Identify the smallest layer that owns the requested behavior.
+4. Reuse existing paths when they already express the same behavior.
+5. Make the smallest reasonable change.
+6. Verify regressions.
 
-Do not rewrite working parts of the application unnecessarily.
+Do not rewrite working systems unnecessarily.
 
-Do not introduce a new library when the existing stack can reasonably solve the problem.
+Do not introduce speculative architecture.
 
-Do not generate large amounts of unused or speculative code.
+Do not implement future roadmap features as part of the current task.
+
+If a limitation is discovered outside the requested scope, report it instead
+of automatically fixing it.
+
+
+## Prototype-First Development
+
+Echo OS is developed experimentally.
+
+Prefer:
+
+idea
+→ smallest working prototype
+→ actual use
+→ observation
+→ refinement
+
+over:
+
+idea
+→ complete abstract architecture
+→ generalized framework
+→ implementation
+
+Do not attempt to fully formalize concepts such as Item, Application,
+Capability, Workspace, Action, or Tab before the prototype requires it.
+
+When two real code paths begin duplicating the same responsibility, a small
+shared abstraction may be introduced.
+
+Avoid designing systems solely for hypothetical future features.
+
 
 ## AI Agent Behavior
 
-The AI agent is a development assistant, not the sole designer of the project.
+The AI agent is a development assistant, not the product designer.
 
-The human developer makes the final decisions about:
+The human developer makes final decisions about:
 
-- Product concept
+- product concept
 - UX
-- Visual direction
-- Feature scope
-- Architecture
-- Behavior
-- Final implementation
+- visual direction
+- feature scope
+- architecture
+- behavior
+- implementation
 
-When requirements are ambiguous, prefer the simplest implementation consistent with the existing project rather than inventing major new functionality.
+Do not silently reinterpret the project's concept.
 
-Do not silently introduce major architectural changes.
+Do not turn conceptual possibilities mentioned in documentation into
+implementation requirements.
 
-If a requested feature conflicts with the existing architecture, explain the conflict before making a major change.
+When requirements are ambiguous, prefer the smallest implementation consistent
+with current behavior and design direction.
 
-## Implementation Strategy
+If a request would require a major architectural change, explain why before
+performing it.
 
-Build the system incrementally.
+When you notice a potentially useful future improvement, report it separately
+rather than implementing it without request.
 
-Preferred order:
 
-1. Project foundation
-2. Desktop
-3. Window system
-4. Application registry
-5. Virtual file system
-6. File Manager
-7. Settings
-8. Terminal
-9. Additional applications
-10. Visual polish
-11. Animation and interaction refinement
+## Current Development Priorities
 
-Do not implement all features at once.
+Development priorities are determined by the current interaction experiment,
+not by a checklist of conventional OS features.
 
-Each major feature should be functional before moving to the next one.
+The current focus is approximately:
 
-## Quality
+1. Universal Surface
+2. Item discovery and execution
+3. Item/Application separation
+4. Recent Items
+5. Evaluate the resulting interaction loop
+6. Refine the model based on actual use
+
+Do not assume that conventional features such as Settings, Terminal, additional
+Applications, Workspace, or Tabs are automatically the next priority.
+
+After completing a phase, stop unless explicitly asked to continue.
+
+
+## Quality and Verification
 
 Before considering a task complete:
 
-- Run the project.
-- Check for TypeScript errors.
-- Check for build errors.
-- Test the changed behavior.
-- Fix obvious runtime errors.
-- Ensure existing functionality still works.
+- Run TypeScript checks.
+- Run the production build.
+- Use `git diff --check`.
+- Test the changed behavior in the actual application when possible.
+- Check the browser console.
+- Test relevant existing behavior for regressions.
 
 Do not claim that a feature works without verifying it.
 
+When reporting completion, distinguish between:
+
+- directly verified behavior
+- behavior inferred from code
+- known existing issues
+
+
 ## Scope
 
-This is a creative prototype.
+Echo OS is a concept OS and interactive UX prototype.
 
 Do not attempt to implement:
 
-- A real kernel
-- Real hardware access
-- Real operating system APIs
-- Real user accounts
-- Real security boundaries
-- Real process isolation
-- Real device drivers
+- a real kernel
+- real hardware access
+- real device drivers
+- real process isolation
+- real security boundaries
+- real operating-system user accounts
 
-Simulate these concepts only when they contribute to the experience.
+Simulate operating-system concepts only when they contribute to the interaction
+experiment.
 
-The goal is a convincing interactive prototype, not a production operating system.
+Technical realism is useful when it supports the concept, but it is not the
+primary goal.
+
+
+## Guiding Rule
+
+When uncertain between a conventional desktop solution and a smaller
+experimental solution, do not automatically choose the conventional one.
+
+Ask:
+
+> Does this help the user reach and work with what they actually care about,
+> or does it merely make Echo OS behave more like an existing operating system?
+
+Preserve familiar conventions where they are useful.
+
+Challenge them only where doing so serves the central experiment.

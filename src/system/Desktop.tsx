@@ -7,10 +7,15 @@ import { getApps, findApp } from '../apps/registry'
 import { getInitialVfs, VEntry } from '../vfs/vfs'
 import UniversalSurface, { SurfaceResult } from './UniversalSurface'
 
+type RecentItem = Extract<SurfaceResult, { type: 'Item' }>
+
+const MAX_RECENT_ITEMS = 5
+
 export default function Desktop(){
   const wm = useWindowManager()
   const apps = getApps()
   const [surfaceOpen, setSurfaceOpen] = useState(false)
+  const [recentItems, setRecentItems] = useState<RecentItem[]>([])
   const vfs = useMemo(getInitialVfs, [])
 
   function openApp(id:string){
@@ -59,15 +64,30 @@ export default function Desktop(){
 
   const surfaceItems = useMemo(()=>collectItems(vfs), [vfs])
 
+  function recordRecentItem(path: string[], item: Pick<VEntry, 'name' | 'type'>){
+    const recentItem: RecentItem = {
+      type: 'Item',
+      label: item.name,
+      path: path.join('/'),
+      itemType: item.type,
+    }
+    setRecentItems(items=> [
+      recentItem,
+      ...items.filter(existing=> existing.path !== recentItem.path),
+    ].slice(0, MAX_RECENT_ITEMS))
+  }
+
   function executeItem(path: string[], item: Pick<VEntry, 'name' | 'type'>){
     if(item.type === 'dir'){
       const windowId = wm.openGeneric()
       wm.attachApplication(windowId, 'files', 'Files', path)
+      recordRecentItem(path, item)
       return true
     }
     if(item.name.toLowerCase().endsWith('.txt')){
       const windowId = wm.openGeneric()
       wm.attachApplication(windowId, 'text-viewer', item.name, undefined, path)
+      recordRecentItem(path, item)
       return true
     }
     return false
@@ -119,7 +139,7 @@ export default function Desktop(){
           <UniversalSurface
             apps={apps}
             items={surfaceItems}
-            recent={[]}
+            recent={recentItems}
             onClose={()=>setSurfaceOpen(false)}
             onExecute={executeSurfaceResult}
           />
