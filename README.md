@@ -15,14 +15,15 @@ Echo OS는 웹 브라우저에서 직접 사용해볼 수 있는 **Concept OS**�
 Echo OS는 Application마다 전용 Window를 만드는 구조 대신 **Surface**라는 작업 공간을 중심으로 동작하는 방식을 실험하고 있습니다.
 
 ```mermaid
-Desktop --> Surface
-Surface --> Tab1["Tab"]
-Surface --> Tab2["Tab"]
-Surface --> Tab3["Tab"]
+graph TD
+  Desktop --> Surface
+  Surface --> Tab1["Tab"]
+  Surface --> Tab2["Tab"]
+  Surface --> Tab3["Tab"]
 
-Tab1 --> Item1["Item"]
-Tab2 --> Item2["Item"]
-Tab3 --> Application
+  Tab1 --> Item1["Item"]
+  Tab2 --> Item2["Item"]
+  Tab3 --> Application
 ```
 
 Surface 안에서는 File, Folder, Application과 같이 서로 다른 Item을 하나의 작업 흐름 안에서 Tab으로 다룰 수 있습니다.
