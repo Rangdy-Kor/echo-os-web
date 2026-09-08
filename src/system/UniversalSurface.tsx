@@ -21,13 +21,12 @@ export default function UniversalSurface({ apps, items, recent = [], onClose, on
   const inputRef = useRef<HTMLInputElement | null>(null)
 
   const results = useMemo<SurfaceResult[]>(()=>{
-    const actions: SurfaceResult[] = [
-      { type: 'Action', label: 'Browse files', appId: 'files' },
-      { type: 'Action', label: 'Open About', appId: 'about' },
-    ]
+    const actions: SurfaceResult[] = []
     const candidates: SurfaceResult[] = [
       ...actions,
-      ...apps.map(app=>({ type: 'Application' as const, label: app.name, appId: app.id })),
+      ...apps
+        .filter(app=> app.surfaceVisible !== false)
+        .map(app=>({ type: 'Application' as const, label: app.name, appId: app.id })),
       ...items,
     ]
     const normalized = query.trim().toLowerCase()

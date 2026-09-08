@@ -21,13 +21,13 @@ Desktop은 운영체제의 전체적인 환경을 관리합니다.
 
 - Wallpaper
 - System Bar
-- Application Launcher
-- Running Applications
+- Universal Surface
+- Running Windows
 - Notifications
 
 ## Window System
 
-모든 애플리케이션은 공통 Window 시스템을 통해 실행합니다.
+Window는 공통 Window 시스템을 통해 관리되며, 반드시 특정 Application과 함께 생성될 필요는 없습니다. Generic Window를 먼저 만들고 Application을 연결할 수 있습니다.
 
 Window System은 다음 상태와 동작을 관리합니다.
 
@@ -40,11 +40,13 @@ Window System은 다음 상태와 동작을 관리합니다.
 
 각 애플리케이션이 독립적으로 창을 구현하지 않고 공통 시스템을 사용하도록 합니다.
 
+Universal Surface는 Window와 별개의 공통 진입 interface입니다. 사용자가 결과를 선택한 뒤 필요한 경우 Window를 만들고 Application을 연결합니다.
+
 ## Application System
 
 애플리케이션은 App Registry를 통해 등록합니다.
 
-각 애플리케이션은 고유한 ID와 메타데이터를 가지며, Window System을 통해 실행됩니다.
+각 애플리케이션은 고유한 ID와 메타데이터를 가지며, Window에 기능을 제공할 수 있습니다. Application이 항상 사용자 경험의 출발점일 필요는 없습니다.
 
 초기 애플리케이션:
 

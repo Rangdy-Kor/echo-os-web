@@ -1,7 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { getInitialVfs, findEntry, VEntry } from '../vfs/vfs'
 
-export default function FilesApp({ initialPath = [] }: { initialPath?: string[] }){
+type Props = {
+  initialPath?: string[]
+  onOpenItem: (path: string[], item: VEntry) => void
+}
+
+export default function FilesApp({ initialPath = [], onOpenItem }: Props){
   const [vfs] = useState(getInitialVfs)
   const [cwd, setCwd] = useState<string[]>(() => initialPath.slice())
   const cwdRef = useRef<string[]>(cwd)
@@ -137,7 +142,12 @@ export default function FilesApp({ initialPath = [] }: { initialPath?: string[] 
               data-name={c.name}
               className={selected === c.name ? 'selected' : ''}
               onMouseDown={(e)=>{ if ((e as React.MouseEvent).detail > 1) { e.preventDefault() } }}
-              onDoubleClick={(e)=>{ e.preventDefault(); try{ document.getSelection()?.removeAllRanges() }catch{}; if(c.type==='dir') enter(c.name) }}
+              onDoubleClick={(e)=>{
+                e.preventDefault()
+                try{ document.getSelection()?.removeAllRanges() }catch{}
+                if(c.type === 'dir') enter(c.name)
+                else onOpenItem([...cwd, c.name], c)
+              }}
             >
               {c.type==='dir' ? '📁' : '📄'} {c.name}
             </li>

@@ -28,13 +28,15 @@
 
 - Desktop
 - Window System
-- Application Launcher
+- Universal Surface
 - Applications
 - Virtual File System
 - Settings
 - Terminal
 
 실제 하드웨어 제어, 커널, 드라이버, 프로세스 격리 등의 기능은 구현하지 않습니다.
+
+Universal Surface는 Item, Application, Action을 찾고 여는 공통 진입점입니다. 현재 실험에서는 Application 자체보다 사용자가 다루는 Item과 작업 맥락을 앞에 두는 방향을 탐색합니다.
 
 ## AI Collaboration
 

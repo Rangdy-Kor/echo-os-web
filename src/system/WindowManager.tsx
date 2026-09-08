@@ -5,6 +5,7 @@ export type WindowState = {
   id: string
   appId?: string
   initialPath?: string[]
+  initialItemPath?: string[]
   title: string
   x:number
   y:number
@@ -21,7 +22,7 @@ export type WindowManagerAPI = {
   windows: WindowState[]
   open: (app: AppDescriptor, opts?: { singleInstance?: boolean })=> string
   openGeneric: (title?: string)=> string
-  attachApplication: (windowId: string, appId: string, title?: string, initialPath?: string[])=>void
+  attachApplication: (windowId: string, appId: string, title?: string, initialPath?: string[], initialItemPath?: string[])=>void
   close: (id:string)=>void
   focus: (id:string)=>void
   setPos: (id:string, x:number,y:number)=>void
@@ -40,7 +41,9 @@ export default function useWindowManager(): WindowManagerAPI{
     const shouldSingle = opts?.singleInstance ?? app.singleInstance ?? false
 
     if(shouldSingle){
-      const existing = windows.filter(w=> w.appId === app.id).reduce((a,b)=> a.z>b.z? a:b, null as WindowState | null)
+      const existing = windows
+        .filter(w=> w.appId === app.id)
+        .reduce<WindowState | null>((a,b)=> !a || a.z > b.z ? a : b, null)
       if(existing){
         // if minimized, restore
         setWindows(ws=> ws.map(w=> w.id===existing.id ? {...w, minimized: false} : w))
@@ -74,9 +77,9 @@ export default function useWindowManager(): WindowManagerAPI{
     return id
   },[])
 
-  const attachApplication = useCallback((windowId: string, appId: string, title?: string, initialPath?: string[])=>{
+  const attachApplication = useCallback((windowId: string, appId: string, title?: string, initialPath?: string[], initialItemPath?: string[])=>{
     setWindows(ws=> ws.map(win=> win.id === windowId
-      ? { ...win, appId, title: title ?? win.title, initialPath }
+      ? { ...win, appId, title: title ?? win.title, initialPath, initialItemPath }
       : win
     ))
   },[])

@@ -59,17 +59,29 @@ export default function Desktop(){
 
   const surfaceItems = useMemo(()=>collectItems(vfs), [vfs])
 
-  function executeSurfaceResult(result: SurfaceResult){
-    if(result.type === 'Item'){
-      if(result.itemType !== 'dir') return
-      const path = result.path.split('/').filter(Boolean)
+  function executeItem(path: string[], item: Pick<VEntry, 'name' | 'type'>){
+    if(item.type === 'dir'){
       const windowId = wm.openGeneric()
       wm.attachApplication(windowId, 'files', 'Files', path)
-      setSurfaceOpen(false)
+      return true
+    }
+    if(item.name.toLowerCase().endsWith('.txt')){
+      const windowId = wm.openGeneric()
+      wm.attachApplication(windowId, 'text-viewer', item.name, undefined, path)
+      return true
+    }
+    return false
+  }
+
+  function executeSurfaceResult(result: SurfaceResult){
+    if(result.type === 'Item'){
+      const path = result.path.split('/').filter(Boolean)
+      if(executeItem(path, { name: result.label, type: result.itemType })) setSurfaceOpen(false)
       return
     }
     const windowId = wm.openGeneric()
-    wm.attachApplication(windowId, result.appId, result.type === 'Action' ? result.label : undefined)
+    const title = result.type === 'Action' ? result.label : findApp(result.appId)?.name
+    wm.attachApplication(windowId, result.appId, title)
     setSurfaceOpen(false)
   }
 
@@ -81,7 +93,11 @@ export default function Desktop(){
           {wm.windows.map(w=>{
             const app = w.appId ? findApp(w.appId) : undefined
             const Comp = app?.component
-            const appProps = w.appId === 'files' ? { initialPath: w.initialPath } : undefined
+            const appProps = w.appId === 'files'
+              ? { initialPath: w.initialPath, onOpenItem: executeItem }
+              : w.appId === 'text-viewer'
+                ? { initialItemPath: w.initialItemPath }
+                : undefined
             return (
               <Window key={w.id} state={w} onClose={wm.close} onFocus={wm.focus} onMove={wm.setPos} onResize={wm.setSize} onMinimize={wm.toggleMinimize} onMaximize={wm.toggleMaximize}>
                 {Comp ? <Comp {...appProps} /> : <div className="generic-workspace"><p>What do you want to do?</p></div>}
