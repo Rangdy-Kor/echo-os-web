@@ -4,13 +4,18 @@ import { getInitialVfs, findEntry, VEntry } from '../vfs/vfs'
 type Props = {
   initialPath?: string[]
   onOpenItem: (path: string[], item: VEntry) => void
+  windowId: string
+  onTitleChange: (windowId: string, title: string) => void
 }
 
-export default function FilesApp({ initialPath = [], onOpenItem }: Props){
+export default function FilesApp({ initialPath = [], onOpenItem, windowId, onTitleChange }: Props){
   const [vfs] = useState(getInitialVfs)
   const [cwd, setCwd] = useState<string[]>(() => initialPath.slice())
   const cwdRef = useRef<string[]>(cwd)
   useEffect(() => { cwdRef.current = cwd }, [cwd])
+  useEffect(() => {
+    onTitleChange(windowId, cwd.length === 0 ? 'Files' : cwd[cwd.length - 1])
+  }, [cwd, onTitleChange, windowId])
 
   // navigation history stacks: store snapshots of cwd arrays
   const [backStack, setBackStack] = useState<string[][]>([])

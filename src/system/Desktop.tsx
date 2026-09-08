@@ -125,7 +125,7 @@ export default function Desktop(){
             const app = w.appId ? findApp(w.appId) : undefined
             const Comp = app?.component
             const appProps = w.appId === 'files'
-              ? { initialPath: w.initialPath, onOpenItem: executeItem }
+              ? { initialPath: w.initialPath, onOpenItem: executeItem, windowId: w.id, onTitleChange: wm.setTitle }
               : w.appId === 'text-viewer'
                 ? { initialItemPath: w.initialItemPath }
                 : undefined

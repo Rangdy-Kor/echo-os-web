@@ -25,6 +25,7 @@ export type WindowManagerAPI = {
   attachApplication: (windowId: string, appId: string, title?: string, initialPath?: string[], initialItemPath?: string[])=>void
   close: (id:string)=>void
   focus: (id:string)=>void
+  setTitle: (id:string, title:string)=>void
   setPos: (id:string, x:number,y:number)=>void
   setSize: (id:string, w:number,h:number,x?:number,y?:number)=>void
   toggleMinimize: (id:string)=>void
@@ -90,10 +91,11 @@ export default function useWindowManager(): WindowManagerAPI{
     return ws.map(w=> w.id===id ? {...w, z: top+1} : w)
   }),[])
 
+  const setTitle = useCallback((id:string, title:string)=> setWindows(ws=> ws.map(w=> w.id===id && w.title!==title?{...w,title}:w)),[])
   const setPos = useCallback((id:string, x:number,y:number)=> setWindows(ws=> ws.map(w=> w.id===id?{...w,x,y}:w)),[])
   const setSize = useCallback((id:string, w:number,h:number, x?:number,y?:number)=> setWindows(ws=> ws.map(win=> win.id===id?{...win, w: Math.max(w, win.minW ?? 0), h: Math.max(h, win.minH ?? 0), x: x!==undefined?x:win.x, y: y!==undefined?y:win.y}:win)),[])
   const toggleMinimize = useCallback((id:string)=> setWindows(ws=> ws.map(w=> w.id===id?{...w, minimized: !w.minimized}:w)),[])
   const toggleMaximize = useCallback((id:string)=> setWindows(ws=> ws.map(w=> w.id===id?{...w, maximized: !w.maximized}:w)),[])
 
-  return { windows, open, openGeneric, attachApplication, close, focus, setPos, setSize, toggleMinimize, toggleMaximize }
+  return { windows, open, openGeneric, attachApplication, close, focus, setTitle, setPos, setSize, toggleMinimize, toggleMaximize }
 }
