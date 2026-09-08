@@ -54,4 +54,4 @@ Echo OS의 목적은 기존 OS보다 절대적으로 우월한 방식을 증명�
 
 ## 데모
 
-[](http://echo-os-web.vercel.app/)
+[Echo OS Web - Vercel](http://echo-os-web.vercel.app/)
