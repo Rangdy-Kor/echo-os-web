@@ -85,6 +85,17 @@ export default function Desktop(){
       return true
     }
     if(item.name.toLowerCase().endsWith('.txt')){
+      const existingWindow = wm.windows.find(window=>
+        window.appId === 'text-viewer' &&
+        window.initialItemPath?.length === path.length &&
+        window.initialItemPath.every((part, index)=> part === path[index])
+      )
+      if(existingWindow){
+        if(existingWindow.minimized) wm.toggleMinimize(existingWindow.id)
+        wm.focus(existingWindow.id)
+        recordRecentItem(path, item)
+        return true
+      }
       const windowId = wm.openGeneric()
       wm.attachApplication(windowId, 'text-viewer', item.name, undefined, path)
       recordRecentItem(path, item)
