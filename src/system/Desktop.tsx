@@ -236,7 +236,6 @@ export default function Desktop(){
                       onAddTab={()=>addTab(w.id)}
                       onActivateTab={tabId=>activateTab(w.id, tabId)}
                       onCloseTab={tabId=>closeTab(w.id, tabId)}
-                      onTitleChange={wm.setTitle}
                     />
                   : Comp ? <Comp {...appProps} /> : <div className="generic-workspace"><p>What do you want to do?</p></div>}
               </Window>

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import React from 'react'
 import type { AppDescriptor } from '../apps/registry'
 import { findApp } from '../apps/registry'
 import type { VEntry } from '../vfs/vfs'
@@ -31,21 +31,13 @@ type Props = {
   onAddTab: () => void
   onActivateTab: (tabId: string) => void
   onCloseTab: (tabId: string) => void
-  onTitleChange: (windowId: string, title: string) => void
 }
 
 function tabLabel(tab: SurfaceTab){
   return tab.target.type === 'empty' ? 'New Tab' : tab.target.label
 }
 
-export default function SurfaceWorkspace({ surface, apps, items, recent, onExecute, onOpenItem, onDirectoryChange, onAddTab, onActivateTab, onCloseTab, onTitleChange }: Props){
-  const activeTab = surface.tabs.find(tab=>tab.id === surface.activeTabId) ?? surface.tabs[0]
-  const activeWindowTitle = activeTab?.target.type === 'empty' ? 'Surface' : activeTab?.target.label ?? 'Surface'
-
-  useEffect(()=>{
-    onTitleChange(surface.windowId, activeWindowTitle)
-  }, [activeWindowTitle, onTitleChange, surface.windowId])
-
+export default function SurfaceWorkspace({ surface, apps, items, recent, onExecute, onOpenItem, onDirectoryChange, onAddTab, onActivateTab, onCloseTab }: Props){
   return (
     <div className="surface-workspace">
       <div className="surface-tabs" role="tablist" aria-label="Surface tabs">
@@ -58,7 +50,7 @@ export default function SurfaceWorkspace({ surface, apps, items, recent, onExecu
             </div>
           )
         })}
-        <button className="button surface-add-tab" onClick={onAddTab}>＋ Tab</button>
+        <button className="button surface-add-tab" aria-label="New Tab" title="New Tab" onClick={onAddTab}>＋</button>
       </div>
       <div className="surface-tab-content">
         {surface.tabs.map(tab=>{

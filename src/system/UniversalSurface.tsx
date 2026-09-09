@@ -15,6 +15,13 @@ type Props = {
   onExecute: (result: SurfaceResult, mode?: 'current' | 'background-tab') => void
 }
 
+function resultTypeLabel(result: SurfaceResult){
+  if(result.type !== 'Item') return result.type
+  if(result.itemType === 'dir') return 'Folder'
+  if(result.label.toLowerCase().endsWith('.txt')) return 'Text'
+  return 'File'
+}
+
 export default function UniversalSurface({ apps, items, recent = [], active = true, onExecute }: Props){
   const [query, setQuery] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
@@ -82,11 +89,10 @@ export default function UniversalSurface({ apps, items, recent = [], active = tr
               onAuxClick={event=>{ if(event.button === 1){ event.preventDefault(); onExecute(result, 'background-tab') } }}
             >
               <span>{result.label}</span>
-              <span className="universal-surface-result-type">{result.type}</span>
+              <span className="universal-surface-result-type">{resultTypeLabel(result)}</span>
             </button>
           ))}
         </div>
-        <div className="universal-surface-hint">↑↓ Select · Enter Open</div>
       </div>
   )
 }
