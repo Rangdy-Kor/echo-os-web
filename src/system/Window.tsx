@@ -155,9 +155,11 @@ export default function Window({ state, onClose, onFocus, onMove, onResize, onMi
     try{ (e.target as Element).setPointerCapture(e.pointerId) }catch{}
   }
 
-  if(state.minimized) return null
-
-  const style: React.CSSProperties = state.maximized ? {left:0,top:0,right:0,bottom:48,position:'absolute'} : {left:state.x,top:state.y,width:state.w,height:state.h}
+  const style: React.CSSProperties = state.minimized
+    ? { display: 'none' }
+    : state.maximized
+      ? {left:0,top:0,right:0,bottom:48,position:'absolute'}
+      : {left:state.x,top:state.y,width:state.w,height:state.h}
 
   // don't render resize handles for maximized windows
   const showHandles = !state.maximized

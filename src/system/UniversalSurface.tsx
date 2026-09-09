@@ -11,11 +11,11 @@ type Props = {
   apps: AppDescriptor[]
   items: SurfaceResult[]
   recent?: SurfaceResult[]
-  onClose: () => void
-  onExecute: (result: SurfaceResult) => void
+  active?: boolean
+  onExecute: (result: SurfaceResult, mode?: 'current' | 'background-tab') => void
 }
 
-export default function UniversalSurface({ apps, items, recent = [], onClose, onExecute }: Props){
+export default function UniversalSurface({ apps, items, recent = [], active = true, onExecute }: Props){
   const [query, setQuery] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement | null>(null)
@@ -34,8 +34,8 @@ export default function UniversalSurface({ apps, items, recent = [], onClose, on
   }, [apps, items, query, recent])
 
   useEffect(()=>{
-    inputRef.current?.focus()
-  },[])
+    if(active) inputRef.current?.focus()
+  },[active])
 
   useEffect(()=>{
     setSelectedIndex(index=> results.length ? Math.min(index, results.length - 1) : 0)
@@ -51,16 +51,12 @@ export default function UniversalSurface({ apps, items, recent = [], onClose, on
     } else if(e.key === 'Enter'){
       e.preventDefault()
       const result = results[selectedIndex]
-      if(result) onExecute(result)
-    } else if(e.key === 'Escape'){
-      e.preventDefault()
-      onClose()
+      if(result) onExecute(result, 'current')
     }
   }
 
   return (
-    <div className="universal-surface-backdrop" onMouseDown={e=>{ if(e.target === e.currentTarget) onClose() }}>
-      <div className="universal-surface" role="dialog" aria-label="Universal Surface">
+      <div className="universal-surface" role="search" aria-label="Universal Surface">
         <input
           ref={inputRef}
           className="universal-surface-input"
@@ -82,15 +78,15 @@ export default function UniversalSurface({ apps, items, recent = [], onClose, on
               key={`${result.type}-${result.label}-${'appId' in result ? result.appId : result.path}`}
               className={`universal-surface-result${index === selectedIndex ? ' selected' : ''}`}
               onMouseEnter={()=>setSelectedIndex(index)}
-              onClick={()=>onExecute(result)}
+              onClick={()=>onExecute(result, 'current')}
+              onAuxClick={event=>{ if(event.button === 1){ event.preventDefault(); onExecute(result, 'background-tab') } }}
             >
               <span>{result.label}</span>
               <span className="universal-surface-result-type">{result.type}</span>
             </button>
           ))}
         </div>
-        <div className="universal-surface-hint">↑↓ Select · Enter Open · Esc Close</div>
+        <div className="universal-surface-hint">↑↓ Select · Enter Open</div>
       </div>
-    </div>
   )
 }

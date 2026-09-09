@@ -5,22 +5,29 @@ import Taskbar from './Taskbar'
 import { WindowManagerProvider } from './WindowManagerContext'
 import { getApps, findApp } from '../apps/registry'
 import { getInitialVfs, VEntry } from '../vfs/vfs'
-import UniversalSurface, { SurfaceResult } from './UniversalSurface'
+import { type SurfaceResult } from './UniversalSurface'
+import SurfaceWorkspace, { type SurfaceState, type SurfaceTab, type TabTarget } from './SurfaceWorkspace'
 
 type RecentItem = Extract<SurfaceResult, { type: 'Item' }>
 
 const MAX_RECENT_ITEMS = 5
+let nextTabId = 1
+
+function createEmptyTab(): SurfaceTab{
+  return { id: `tab-${nextTabId++}`, target: { type: 'empty' } }
+}
 
 export default function Desktop(){
   const wm = useWindowManager()
   const apps = getApps()
-  const [surfaceOpen, setSurfaceOpen] = useState(false)
+  const [surfaces, setSurfaces] = useState<SurfaceState[]>([])
   const [recentItems, setRecentItems] = useState<RecentItem[]>([])
   const vfs = useMemo(getInitialVfs, [])
 
-  function openApp(id:string){
-    const app = findApp(id)
-    if(app) wm.open(app)
+  function openSurface(){
+    const windowId = wm.openGeneric('Surface')
+    const tab = createEmptyTab()
+    setSurfaces(current=>[...current, { windowId, tabs: [tab], activeTabId: tab.id }])
   }
 
   const wallpaperRef = useRef<HTMLDivElement | null>(null)
@@ -104,16 +111,101 @@ export default function Desktop(){
     return false
   }
 
-  function executeSurfaceResult(result: SurfaceResult){
+  function resolveItemTarget(path: string[], item: Pick<VEntry, 'name' | 'type'>): TabTarget | null{
+    if(item.type === 'dir') return { type: 'item', label: item.name, path, itemType: item.type, appId: 'files' }
+    if(item.name.toLowerCase().endsWith('.txt')) return { type: 'item', label: item.name, path, itemType: item.type, appId: 'text-viewer' }
+    return null
+  }
+
+  function replaceTabTarget(windowId: string, tabId: string, target: TabTarget){
+    setSurfaces(current=>current.map(surface=>surface.windowId === windowId
+      ? { ...surface, tabs: surface.tabs.map(tab=>tab.id === tabId ? { ...tab, target } : tab) }
+      : surface
+    ))
+  }
+
+  function addTargetTab(windowId: string, target: TabTarget, activate = false){
+    const tab: SurfaceTab = { id: `tab-${nextTabId++}`, target }
+    setSurfaces(current=>current.map(surface=>surface.windowId === windowId
+      ? { ...surface, tabs: [...surface.tabs, tab], activeTabId: activate ? tab.id : surface.activeTabId }
+      : surface
+    ))
+  }
+
+  function executeSurfaceResult(windowId: string, tabId: string, result: SurfaceResult, mode: 'current' | 'background-tab'){
     if(result.type === 'Item'){
       const path = result.path.split('/').filter(Boolean)
-      if(executeItem(path, { name: result.label, type: result.itemType })) setSurfaceOpen(false)
+      const target = resolveItemTarget(path, { name: result.label, type: result.itemType })
+      if(target){
+        if(mode === 'background-tab'){
+          addTargetTab(windowId, target)
+        } else {
+          const surface = surfaces.find(candidate=>candidate.windowId === windowId)
+          const existingTab = surface?.tabs.find(tab=>
+            tab.target.type === 'item' &&
+            tab.target.path.length === path.length &&
+            tab.target.path.every((part, index)=>part === path[index])
+          )
+          if(existingTab) activateTab(windowId, existingTab.id)
+          else replaceTabTarget(windowId, tabId, target)
+        }
+        recordRecentItem(path, { name: result.label, type: result.itemType })
+      }
       return
     }
-    const windowId = wm.openGeneric()
-    const title = result.type === 'Action' ? result.label : findApp(result.appId)?.name
-    wm.attachApplication(windowId, result.appId, title)
-    setSurfaceOpen(false)
+    if(result.type === 'Application'){
+      const target: TabTarget = { type: 'application', label: result.label, appId: result.appId }
+      if(mode === 'background-tab') addTargetTab(windowId, target)
+      else replaceTabTarget(windowId, tabId, target)
+    }
+  }
+
+  function executeItemInTab(windowId: string, tabId: string, path: string[], item: VEntry){
+    const target = resolveItemTarget(path, item)
+    if(!target) return false
+    replaceTabTarget(windowId, tabId, target)
+    recordRecentItem(path, item)
+    return true
+  }
+
+  function addTab(windowId: string){
+    const tab = createEmptyTab()
+    setSurfaces(current=>current.map(surface=>surface.windowId === windowId
+      ? { ...surface, tabs: [...surface.tabs, tab], activeTabId: tab.id }
+      : surface
+    ))
+  }
+
+  function activateTab(windowId: string, tabId: string){
+    setSurfaces(current=>current.map(surface=>surface.windowId === windowId ? { ...surface, activeTabId: tabId } : surface))
+  }
+
+  function closeTab(windowId: string, tabId: string){
+    setSurfaces(current=>current.map(surface=>{
+      if(surface.windowId !== windowId) return surface
+      const closingIndex = surface.tabs.findIndex(tab=>tab.id === tabId)
+      const remaining = surface.tabs.filter(tab=>tab.id !== tabId)
+      if(remaining.length === 0){
+        const emptyTab = createEmptyTab()
+        return { ...surface, tabs: [emptyTab], activeTabId: emptyTab.id }
+      }
+      if(surface.activeTabId !== tabId) return { ...surface, tabs: remaining }
+      const nextActive = remaining[Math.min(closingIndex, remaining.length - 1)]
+      return { ...surface, tabs: remaining, activeTabId: nextActive.id }
+    }))
+  }
+
+  function updateDirectoryTarget(windowId: string, tabId: string, path: string[]){
+    const label = path.length === 0 ? 'Files' : path[path.length - 1]
+    const target: TabTarget = path.length === 0
+      ? { type: 'application', label, appId: 'files' }
+      : { type: 'item', label, path, itemType: 'dir', appId: 'files' }
+    replaceTabTarget(windowId, tabId, target)
+  }
+
+  function closeWindow(id: string){
+    setSurfaces(current=>current.filter(surface=>surface.windowId !== id))
+    wm.close(id)
   }
 
   return (
@@ -122,6 +214,7 @@ export default function Desktop(){
         <div ref={wallpaperRef} className="wallpaper" style={{position:'absolute',inset:0,background:'transparent'}} onPointerDown={onDesktopPointerDown} />
         <div className="window-layer">
           {wm.windows.map(w=>{
+            const surface = surfaces.find(candidate=>candidate.windowId === w.id)
             const app = w.appId ? findApp(w.appId) : undefined
             const Comp = app?.component
             const appProps = w.appId === 'files'
@@ -130,8 +223,22 @@ export default function Desktop(){
                 ? { initialItemPath: w.initialItemPath }
                 : undefined
             return (
-              <Window key={w.id} state={w} onClose={wm.close} onFocus={wm.focus} onMove={wm.setPos} onResize={wm.setSize} onMinimize={wm.toggleMinimize} onMaximize={wm.toggleMaximize}>
-                {Comp ? <Comp {...appProps} /> : <div className="generic-workspace"><p>What do you want to do?</p></div>}
+              <Window key={w.id} state={w} onClose={closeWindow} onFocus={wm.focus} onMove={wm.setPos} onResize={wm.setSize} onMinimize={wm.toggleMinimize} onMaximize={wm.toggleMaximize}>
+                {surface
+                  ? <SurfaceWorkspace
+                      surface={surface}
+                      apps={apps}
+                      items={surfaceItems}
+                      recent={recentItems}
+                      onExecute={(tabId, result, mode)=>executeSurfaceResult(w.id, tabId, result, mode)}
+                      onOpenItem={(tabId, path, item)=>executeItemInTab(w.id, tabId, path, item)}
+                      onDirectoryChange={(tabId, path)=>updateDirectoryTarget(w.id, tabId, path)}
+                      onAddTab={()=>addTab(w.id)}
+                      onActivateTab={tabId=>activateTab(w.id, tabId)}
+                      onCloseTab={tabId=>closeTab(w.id, tabId)}
+                      onTitleChange={wm.setTitle}
+                    />
+                  : Comp ? <Comp {...appProps} /> : <div className="generic-workspace"><p>What do you want to do?</p></div>}
               </Window>
             )
           })}
@@ -140,21 +247,12 @@ export default function Desktop(){
         <div className="system-bar">
           <div style={{display:'flex',alignItems:'center'}}>
             {/* Taskbar */}
-            <Taskbar apps={apps} wm={wm} showApplicationLaunchers={false} />
-            <button className="button" onClick={()=>setSurfaceOpen(true)} title="Open Surface">＋ Surface</button>
+            <Taskbar apps={apps} wm={{...wm, close: closeWindow}} showApplicationLaunchers={false} />
+            <button className="button" onClick={openSurface} title="Open Surface">＋ Surface</button>
           </div>
           <div style={{flex:1}} />
           <div style={{color:'var(--muted)'}}>Echo OS</div>
         </div>
-        {surfaceOpen && (
-          <UniversalSurface
-            apps={apps}
-            items={surfaceItems}
-            recent={recentItems}
-            onClose={()=>setSurfaceOpen(false)}
-            onExecute={executeSurfaceResult}
-          />
-        )}
       </div>
     </WindowManagerProvider>
   )
