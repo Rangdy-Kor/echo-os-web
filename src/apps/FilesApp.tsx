@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { getInitialVfs, findEntry, VEntry } from '../vfs/vfs'
+import { findEntry, VEntry } from '../vfs/vfs'
 
 type Props = {
+  vfs: VEntry
   initialPath?: string[]
   onOpenItem: (path: string[], item: VEntry) => void
   windowId?: string
@@ -9,8 +10,7 @@ type Props = {
   onPathChange?: (path: string[]) => void
 }
 
-export default function FilesApp({ initialPath = [], onOpenItem, windowId, onTitleChange, onPathChange }: Props){
-  const [vfs] = useState(getInitialVfs)
+export default function FilesApp({ vfs, initialPath = [], onOpenItem, windowId, onTitleChange, onPathChange }: Props){
   const [cwd, setCwd] = useState<string[]>(() => initialPath.slice())
   const cwdRef = useRef<string[]>(cwd)
   useEffect(() => { cwdRef.current = cwd }, [cwd])

@@ -22,7 +22,7 @@ export default function Desktop(){
   const apps = getApps()
   const [surfaces, setSurfaces] = useState<SurfaceState[]>([])
   const [recentItems, setRecentItems] = useState<RecentItem[]>([])
-  const vfs = useMemo(getInitialVfs, [])
+  const [vfs] = useState(getInitialVfs)
 
   function openSurface(){
     const windowId = wm.openGeneric('Surface')
@@ -218,9 +218,9 @@ export default function Desktop(){
             const app = w.appId ? findApp(w.appId) : undefined
             const Comp = app?.component
             const appProps = w.appId === 'files'
-              ? { initialPath: w.initialPath, onOpenItem: executeItem, windowId: w.id, onTitleChange: wm.setTitle }
+              ? { vfs, initialPath: w.initialPath, onOpenItem: executeItem, windowId: w.id, onTitleChange: wm.setTitle }
               : w.appId === 'text-viewer'
-                ? { initialItemPath: w.initialItemPath }
+                ? { vfs, initialItemPath: w.initialItemPath }
                 : undefined
             return (
               <Window key={w.id} state={w} onClose={closeWindow} onFocus={wm.focus} onMove={wm.setPos} onResize={wm.setSize} onMinimize={wm.toggleMinimize} onMaximize={wm.toggleMaximize}>
@@ -228,6 +228,7 @@ export default function Desktop(){
                   ? <SurfaceWorkspace
                       surface={surface}
                       apps={apps}
+                      vfs={vfs}
                       items={surfaceItems}
                       recent={recentItems}
                       onExecute={(tabId, result, mode)=>executeSurfaceResult(w.id, tabId, result, mode)}

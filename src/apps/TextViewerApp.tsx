@@ -1,8 +1,7 @@
-import React, { useState } from 'react'
-import { findEntry, getInitialVfs } from '../vfs/vfs'
+import React from 'react'
+import { findEntry, VEntry } from '../vfs/vfs'
 
-export default function TextViewerApp({ initialItemPath = [] }: { initialItemPath?: string[] }){
-  const [vfs] = useState(getInitialVfs)
+export default function TextViewerApp({ vfs, initialItemPath = [] }: { vfs: VEntry; initialItemPath?: string[] }){
   const item = findEntry(initialItemPath, vfs)
 
   if(!item || item.type !== 'file'){
