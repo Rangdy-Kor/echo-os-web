@@ -28,6 +28,7 @@ type Props = {
   recent: SurfaceResult[]
   onExecute: (tabId: string, result: SurfaceResult, mode: 'current' | 'background-tab') => void
   onOpenItem: (tabId: string, path: string[], item: VEntry) => void
+  onSaveItem: (path: string[], content: string) => void
   onDirectoryChange: (tabId: string, path: string[]) => void
   onAddTab: () => void
   onActivateTab: (tabId: string) => void
@@ -38,7 +39,7 @@ function tabLabel(tab: SurfaceTab){
   return tab.target.type === 'empty' ? 'New Tab' : tab.target.label
 }
 
-export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, onExecute, onOpenItem, onDirectoryChange, onAddTab, onActivateTab, onCloseTab }: Props){
+export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, onExecute, onOpenItem, onSaveItem, onDirectoryChange, onAddTab, onActivateTab, onCloseTab }: Props){
   return (
     <div className="surface-workspace">
       <div className="surface-tabs" role="tablist" aria-label="Surface tabs">
@@ -70,7 +71,7 @@ export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, on
               const initialPath = target.type === 'item' ? target.path : []
               content = <Comp vfs={vfs} initialPath={initialPath} onOpenItem={(path: string[], item: VEntry)=>onOpenItem(tab.id, path, item)} onPathChange={(path: string[])=>onDirectoryChange(tab.id, path)} />
             } else if(target.appId === 'text-viewer' && target.type === 'item'){
-              content = <Comp vfs={vfs} initialItemPath={target.path} />
+              content = <Comp key={target.path.join('/')} vfs={vfs} initialItemPath={target.path} onSave={onSaveItem} />
             } else {
               content = <Comp />
             }

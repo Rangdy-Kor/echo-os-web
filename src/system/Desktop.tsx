@@ -4,7 +4,7 @@ import Window from './Window'
 import Taskbar from './Taskbar'
 import { WindowManagerProvider } from './WindowManagerContext'
 import { getApps, findApp } from '../apps/registry'
-import { getInitialVfs, VEntry } from '../vfs/vfs'
+import { getInitialVfs, updateFileContent, VEntry } from '../vfs/vfs'
 import { type SurfaceResult } from './UniversalSurface'
 import SurfaceWorkspace, { type SurfaceState, type SurfaceTab, type TabTarget } from './SurfaceWorkspace'
 
@@ -22,7 +22,7 @@ export default function Desktop(){
   const apps = getApps()
   const [surfaces, setSurfaces] = useState<SurfaceState[]>([])
   const [recentItems, setRecentItems] = useState<RecentItem[]>([])
-  const [vfs] = useState(getInitialVfs)
+  const [vfs, setVfs] = useState(getInitialVfs)
 
   function openSurface(){
     const windowId = wm.openGeneric('Surface')
@@ -168,6 +168,10 @@ export default function Desktop(){
     return true
   }
 
+  function saveFile(path: string[], content: string){
+    setVfs(current=>updateFileContent(current, path, content))
+  }
+
   function addTab(windowId: string){
     const tab = createEmptyTab()
     setSurfaces(current=>current.map(surface=>surface.windowId === windowId
@@ -220,7 +224,7 @@ export default function Desktop(){
             const appProps = w.appId === 'files'
               ? { vfs, initialPath: w.initialPath, onOpenItem: executeItem, windowId: w.id, onTitleChange: wm.setTitle }
               : w.appId === 'text-viewer'
-                ? { vfs, initialItemPath: w.initialItemPath }
+                ? { vfs, initialItemPath: w.initialItemPath, onSave: saveFile }
                 : undefined
             return (
               <Window key={w.id} state={w} onClose={closeWindow} onFocus={wm.focus} onMove={wm.setPos} onResize={wm.setSize} onMinimize={wm.toggleMinimize} onMaximize={wm.toggleMaximize}>
@@ -233,6 +237,7 @@ export default function Desktop(){
                       recent={recentItems}
                       onExecute={(tabId, result, mode)=>executeSurfaceResult(w.id, tabId, result, mode)}
                       onOpenItem={(tabId, path, item)=>executeItemInTab(w.id, tabId, path, item)}
+                      onSaveItem={saveFile}
                       onDirectoryChange={(tabId, path)=>updateDirectoryTarget(w.id, tabId, path)}
                       onAddTab={()=>addTab(w.id)}
                       onActivateTab={tabId=>activateTab(w.id, tabId)}
