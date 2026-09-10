@@ -37,12 +37,38 @@ Echo OS의 관점은 Application의 제거가 아닙니다. Application은 사�
 - 이동·크기 조절·최소화·최대화·닫기가 가능한 Window System
 - Taskbar와 실행 중 Window 관리
 - 간단한 Virtual File System과 Files
-- Item / Application을 함께 찾는 Universal Search (이후 Surface Window로 전환 예정)
-- File과 Directory의 Item 실행
-- `.txt` Item을 직접 여는 read-only Text Viewer
+- Surface Window와 Surface 내부의 persistent Tab
+- 빈 Tab에서 Item / Application을 함께 찾는 Universal Search
+- File과 Directory의 Item 실행 및 같은 Surface 내 Item reuse
+- 공유 Virtual File System과 Files
+- `.txt` Item의 편집 및 저장이 가능한 Text Editor
+- 새 Text File 생성
+- 편집 중인 Text Tab의 dirty 상태 표시
 - 최근 실행한 Item을 보여주는 in-memory Recent
-- 같은 `.txt` Item을 다시 선택했을 때 기존 Window로 돌아가는 reuse 실험
-- Files의 현재 Directory에 따라 Window title이 바뀌는 Item-oriented identity 실험
+- Recent가 없을 때 표시되는 Suggested
+- Files의 현재 Directory에 따라 Tab identity가 바뀌는 Item-oriented identity 실험
+
+## 로드맵
+
+Echo OS는 현재 기능을 **구현 → 직접 사용 → 문제 발견 → 필요한 추상화 추가** 순서로 발전시키고 있습니다.
+
+### 1차 로드맵 — 기반 구조와 Surface 모델 정립 (완료)
+
+- **Phase 1 — Desktop과 Window System**
+- **Phase 2 — Window 관리와 Taskbar**
+- **Phase 3 — Virtual File System과 Files**
+- **Phase 4 — Universal Search와 Item 실행**
+- **Phase 5 — Surface 도입**
+- **Phase 6 — Persistent Surface Tab 모델**
+
+### 2차 로드맵 — 실제 작업성과 Surface 확장 (진행 중)
+
+- **Phase 7 — 실제 작업 능력**: Shared VFS, Text Edit/Save, Item CRUD를 통해 Surface 안에서 실제 작업이 가능하도록 만듭니다. 현재 이 단계의 후반부이며, New Folder와 Delete가 주요 남은 항목입니다.
+- **Phase 8 — Tab을 작업 단위로 강화**: Tab reorder 등, Tab 자체를 더 완전한 작업 단위로 만드는 기능을 검증합니다. 필요성이 먼저 발견된 Target Back history는 이미 구현했습니다.
+- **Phase 9 — Surface 경계 상호작용**: Surface 간 Tab Drag & Drop과 tear-off처럼, 사용자가 명시적으로 Surface 경계를 넘는 상호작용을 실험합니다.
+- **Phase 10 — 작업 Context 지속성**: Surface rename, Surface/Tab 상태 persistence, 필요 시 Recent persistence를 추가합니다.
+
+AI, Split View, 별도 Workspace 계층, 범용 Capability/Handler framework, 실제 파일 시스템/OPFS 전환 등은 3차 로드맵 이후로 미뤄두고 있습니다.
 
 ## 최종 목표
 
