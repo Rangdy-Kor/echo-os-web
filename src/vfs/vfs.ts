@@ -83,6 +83,31 @@ export function createTextFile(root: VEntry, directoryPath: string[], fileName: 
   return createInDirectory(root, 0)
 }
 
+export function getCollisionSafeName(requestedName: string, siblingNames: string[], currentName: string){
+  const occupiedNames = new Set(siblingNames.filter(name=>name !== currentName))
+  if(!occupiedNames.has(requestedName)) return requestedName
+
+  const extensionIndex = requestedName.lastIndexOf('.')
+  const hasExtension = extensionIndex > 0
+  const stem = hasExtension ? requestedName.slice(0, extensionIndex) : requestedName
+  const extension = hasExtension ? requestedName.slice(extensionIndex) : ''
+  let collisionIndex = 1
+  let candidate = `${stem} (${collisionIndex})${extension}`
+  while(occupiedNames.has(candidate)){
+    collisionIndex += 1
+    candidate = `${stem} (${collisionIndex})${extension}`
+  }
+  return candidate
+}
+
+export function getNewTextFileRenameCandidate(rawName: string, siblingNames: string[], currentName: string){
+  const trimmedName = rawName.trim()
+  if(!trimmedName) return ''
+
+  const normalizedName = trimmedName.toLowerCase().endsWith('.txt') ? trimmedName : `${trimmedName}.txt`
+  return getCollisionSafeName(normalizedName, siblingNames, currentName)
+}
+
 export function renameEntry(root: VEntry, pathParts: string[], newName: string): VEntry{
   const name = newName.trim()
   if(pathParts.length === 0 || !name || name.includes('/')) return root

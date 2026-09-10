@@ -31,7 +31,7 @@ type Props = {
   onExecute: (tabId: string, result: SurfaceResult, mode: 'current' | 'background-tab') => void
   onOpenItem: (tabId: string, path: string[], item: VEntry) => void
   onCreateTextFile: (directoryPath: string[], fileName: string) => void
-  onRenameItem: (path: string[], newName: string) => boolean
+  onRenameItem: (path: string[], newName: string) => string | null
   pathMigration: { id: number; oldPath: string[]; newPath: string[] } | null
   onSaveItem: (path: string[], content: string) => void
   onDirectoryChange: (tabId: string, path: string[]) => void

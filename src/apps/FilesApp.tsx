@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { findEntry, VEntry } from '../vfs/vfs'
+import { findEntry, getCollisionSafeName, getNewTextFileRenameCandidate, VEntry } from '../vfs/vfs'
 
 type PathMigration = { id: number; oldPath: string[]; newPath: string[] }
 
@@ -8,7 +8,7 @@ type Props = {
   initialPath?: string[]
   onOpenItem: (path: string[], item: VEntry) => void
   onCreateTextFile: (directoryPath: string[], fileName: string) => void
-  onRenameItem: (path: string[], newName: string) => boolean
+  onRenameItem: (path: string[], newName: string) => string | null
   pathMigration?: PathMigration | null
   windowId?: string
   onTitleChange?: (windowId: string, title: string) => void
@@ -16,7 +16,7 @@ type Props = {
 }
 
 type ContextMenuState = { x: number; y: number; entryName?: string }
-type RenameState = { originalName: string; draft: string; ensureTextExtension: boolean }
+type RenameState = { originalName: string; draft: string; mode: 'existing' | 'new-text' }
 
 function migratePath(path: string[], migration: PathMigration){
   return path.length >= migration.oldPath.length && migration.oldPath.every((part, index)=>path[index] === part)
@@ -132,13 +132,13 @@ export default function FilesApp({ vfs, initialPath = [], onOpenItem, onCreateTe
     onCreateTextFile(cwdRef.current, name)
     setContextMenu(null)
     setSelected(name)
-    setRenaming({ originalName: name, draft: name, ensureTextExtension: true })
+    setRenaming({ originalName: name, draft: name, mode: 'new-text' })
   }
 
   function startRename(name: string){
     setContextMenu(null)
     setSelected(name)
-    setRenaming({ originalName: name, draft: name, ensureTextExtension: false })
+    setRenaming({ originalName: name, draft: name, mode: 'existing' })
   }
 
   function finishRename(){
@@ -149,12 +149,15 @@ export default function FilesApp({ vfs, initialPath = [], onOpenItem, onCreateTe
       return
     }
 
-    const trimmed = renaming.draft.trim()
-    const newName = renaming.ensureTextExtension && trimmed && !trimmed.toLowerCase().endsWith('.txt')
-      ? `${trimmed}.txt`
-      : trimmed
-    const succeeded = onRenameItem([...cwdRef.current, renaming.originalName], newName)
-    setSelected(succeeded ? newName : renaming.originalName)
+    const rawValue = renaming.draft
+    const trimmedValue = rawValue.trim()
+    const siblingNames = children.map(entry=>entry.name)
+    const finalCandidate = renaming.mode === 'existing'
+      ? getCollisionSafeName(trimmedValue, siblingNames, renaming.originalName)
+      : getNewTextFileRenameCandidate(trimmedValue, siblingNames, renaming.originalName)
+
+    const actualName = onRenameItem([...cwdRef.current, renaming.originalName], finalCandidate)
+    setSelected(actualName ?? renaming.originalName)
     setRenaming(null)
   }
 

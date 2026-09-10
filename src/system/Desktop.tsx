@@ -4,7 +4,7 @@ import Window from './Window'
 import Taskbar from './Taskbar'
 import { WindowManagerProvider } from './WindowManagerContext'
 import { getApps, findApp } from '../apps/registry'
-import { createTextFile, getInitialVfs, renameEntry, updateFileContent, VEntry } from '../vfs/vfs'
+import { createTextFile, findEntry, getInitialVfs, renameEntry, updateFileContent, VEntry } from '../vfs/vfs'
 import { type SurfaceResult } from './UniversalSurface'
 import SurfaceWorkspace, { type SurfaceState, type SurfaceTab, type TabTarget } from './SurfaceWorkspace'
 
@@ -220,10 +220,15 @@ export default function Desktop(){
 
   function renameItem(path: string[], newName: string){
     const updatedVfs = renameEntry(vfs, path, newName)
-    if(updatedVfs === vfs) return false
+    if(updatedVfs === vfs) return null
 
-    const trimmedName = newName.trim()
-    const newPath = [...path.slice(0, -1), trimmedName]
+    const requestedName = newName.trim()
+    const requestedPath = [...path.slice(0, -1), requestedName]
+    const renamedEntry = findEntry(requestedPath, updatedVfs)
+    if(!renamedEntry) return null
+
+    const actualName = renamedEntry.name
+    const newPath = [...path.slice(0, -1), actualName]
     setVfs(updatedVfs)
     setSurfaces(current=>current.map(surface=>({
       ...surface,
@@ -240,12 +245,12 @@ export default function Desktop(){
       return migratedPath === targetPath ? target : {
         ...target,
         path: migratedPath.join('/'),
-        label: targetPath.length === path.length ? trimmedName : target.label,
+        label: targetPath.length === path.length ? actualName : target.label,
       }
     }))
     wm.migrateItemPath(path, newPath)
     setPathMigration(current=>({ id: (current?.id ?? 0) + 1, oldPath: path, newPath }))
-    return true
+    return actualName
   }
 
   function addTab(windowId: string){
