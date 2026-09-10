@@ -25,6 +25,8 @@ export default function TextViewerApp({ vfs, initialItemPath = [], onSave, onDir
     onDirtyChange?.(dirty)
   },[dirty])
 
+  useEffect(()=>()=>onDirtyChange?.(false),[])
+
   if(!item || item.type !== 'file'){
     return <p>Text item not found.</p>
   }

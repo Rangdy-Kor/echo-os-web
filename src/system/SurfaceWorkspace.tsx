@@ -12,6 +12,7 @@ export type TabTarget =
 export type SurfaceTab = {
   id: string
   target: TabTarget
+  history: TabTarget[]
 }
 
 export type SurfaceState = {
@@ -26,12 +27,14 @@ type Props = {
   vfs: VEntry
   items: SurfaceResult[]
   recent: SurfaceResult[]
+  maxRecent: number
   onExecute: (tabId: string, result: SurfaceResult, mode: 'current' | 'background-tab') => void
   onOpenItem: (tabId: string, path: string[], item: VEntry) => void
   onCreateTextFile: (directoryPath: string[], fileName: string) => void
   onSaveItem: (path: string[], content: string) => void
   onDirectoryChange: (tabId: string, path: string[]) => void
   onAddTab: () => void
+  onBack: (tabId: string) => void
   onActivateTab: (tabId: string) => void
   onCloseTab: (tabId: string) => void
 }
@@ -41,7 +44,7 @@ function tabLabel(tab: SurfaceTab, dirty = false){
   return dirty ? `${label}*` : label
 }
 
-export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, onExecute, onOpenItem, onCreateTextFile, onSaveItem, onDirectoryChange, onAddTab, onActivateTab, onCloseTab }: Props){
+export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, maxRecent, onExecute, onOpenItem, onCreateTextFile, onSaveItem, onDirectoryChange, onAddTab, onBack, onActivateTab, onCloseTab }: Props){
   const [dirtyTabs, setDirtyTabs] = useState<Record<string, { path: string; dirty: boolean }>>({})
 
   function setTabDirty(tabId: string, path: string, dirty: boolean){
@@ -54,6 +57,7 @@ export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, on
   return (
     <div className="surface-workspace">
       <div className="surface-tabs" role="tablist" aria-label="Surface tabs">
+        <button className="button surface-tab-back" aria-label="Back in Tab" title="Back in this Tab" disabled={!surface.tabs.find(tab=>tab.id === surface.activeTabId)?.history.length} onClick={()=>onBack(surface.activeTabId)}>←</button>
         {surface.tabs.map(tab=>{
           const active = tab.id === surface.activeTabId
           const path = tab.target.type === 'item' ? tab.target.path.join('/') : null
@@ -75,7 +79,7 @@ export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, on
           let content: React.ReactNode
 
           if(target.type === 'empty'){
-            content = <UniversalSurface apps={apps} items={items} recent={recent} active={active} onExecute={(result, mode = 'current')=>onExecute(tab.id, result, mode)} />
+            content = <UniversalSurface apps={apps} items={items} recent={recent} maxRecent={maxRecent} active={active} onExecute={(result, mode = 'current')=>onExecute(tab.id, result, mode)} />
           } else {
             const app = findApp(target.appId)
             const Comp = app?.component

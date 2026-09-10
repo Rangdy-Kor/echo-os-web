@@ -8,20 +8,34 @@ import { createTextFile, getInitialVfs, updateFileContent, VEntry } from '../vfs
 import { type SurfaceResult } from './UniversalSurface'
 import SurfaceWorkspace, { type SurfaceState, type SurfaceTab, type TabTarget } from './SurfaceWorkspace'
 
-type RecentItem = Extract<SurfaceResult, { type: 'Item' }>
+type RecentTarget = Extract<SurfaceResult, { type: 'Item' | 'Application' }>
 
-const MAX_RECENT_ITEMS = 5
+const MAX_RECENT_TARGETS = 5
 let nextTabId = 1
 
 function createEmptyTab(): SurfaceTab{
-  return { id: `tab-${nextTabId++}`, target: { type: 'empty' } }
+  return { id: `tab-${nextTabId++}`, target: { type: 'empty' }, history: [] }
+}
+
+function targetsMatch(a: TabTarget, b: TabTarget){
+  if(a.type !== b.type) return false
+  if(a.type === 'empty' || b.type === 'empty') return true
+  if(a.type === 'application' || b.type === 'application') return a.type === 'application' && b.type === 'application' && a.appId === b.appId
+  return a.path.length === b.path.length && a.path.every((part, index)=>part === b.path[index])
+}
+
+function recentTargetsMatch(a: RecentTarget, b: RecentTarget){
+  if(a.type !== b.type) return false
+  return a.type === 'Item' && b.type === 'Item'
+    ? a.path === b.path
+    : a.type === 'Application' && b.type === 'Application' && a.appId === b.appId
 }
 
 export default function Desktop(){
   const wm = useWindowManager()
   const apps = getApps()
   const [surfaces, setSurfaces] = useState<SurfaceState[]>([])
-  const [recentItems, setRecentItems] = useState<RecentItem[]>([])
+  const [recentTargets, setRecentTargets] = useState<RecentTarget[]>([])
   const [vfs, setVfs] = useState(getInitialVfs)
 
   function openSurface(){
@@ -72,16 +86,19 @@ export default function Desktop(){
   const surfaceItems = useMemo(()=>collectItems(vfs), [vfs])
 
   function recordRecentItem(path: string[], item: Pick<VEntry, 'name' | 'type'>){
-    const recentItem: RecentItem = {
+    recordRecentTarget({
       type: 'Item',
       label: item.name,
       path: path.join('/'),
       itemType: item.type,
-    }
-    setRecentItems(items=> [
-      recentItem,
-      ...items.filter(existing=> existing.path !== recentItem.path),
-    ].slice(0, MAX_RECENT_ITEMS))
+    })
+  }
+
+  function recordRecentTarget(target: RecentTarget){
+    setRecentTargets(targets=> [
+      target,
+      ...targets.filter(existing=>!recentTargetsMatch(existing, target)),
+    ].slice(0, MAX_RECENT_TARGETS))
   }
 
   function executeItem(path: string[], item: Pick<VEntry, 'name' | 'type'>){
@@ -119,13 +136,23 @@ export default function Desktop(){
 
   function replaceTabTarget(windowId: string, tabId: string, target: TabTarget){
     setSurfaces(current=>current.map(surface=>surface.windowId === windowId
+      ? { ...surface, tabs: surface.tabs.map(tab=>tab.id === tabId && !targetsMatch(tab.target, target)
+        ? { ...tab, target, history: [...tab.history, tab.target] }
+        : tab
+      ) }
+      : surface
+    ))
+  }
+
+  function syncTabTarget(windowId: string, tabId: string, target: TabTarget){
+    setSurfaces(current=>current.map(surface=>surface.windowId === windowId
       ? { ...surface, tabs: surface.tabs.map(tab=>tab.id === tabId ? { ...tab, target } : tab) }
       : surface
     ))
   }
 
   function addTargetTab(windowId: string, target: TabTarget, activate = false){
-    const tab: SurfaceTab = { id: `tab-${nextTabId++}`, target }
+    const tab: SurfaceTab = { id: `tab-${nextTabId++}`, target, history: [] }
     setSurfaces(current=>current.map(surface=>surface.windowId === windowId
       ? { ...surface, tabs: [...surface.tabs, tab], activeTabId: activate ? tab.id : surface.activeTabId }
       : surface
@@ -157,6 +184,7 @@ export default function Desktop(){
       const target: TabTarget = { type: 'application', label: result.label, appId: result.appId }
       if(mode === 'background-tab') addTargetTab(windowId, target)
       else replaceTabTarget(windowId, tabId, target)
+      recordRecentTarget(result)
     }
   }
 
@@ -188,6 +216,20 @@ export default function Desktop(){
     setSurfaces(current=>current.map(surface=>surface.windowId === windowId ? { ...surface, activeTabId: tabId } : surface))
   }
 
+  function goBackInTab(windowId: string, tabId: string){
+    setSurfaces(current=>current.map(surface=>{
+      if(surface.windowId !== windowId) return surface
+      return { ...surface, tabs: surface.tabs.map(tab=>{
+        if(tab.id !== tabId || tab.history.length === 0) return tab
+        return {
+          ...tab,
+          target: tab.history[tab.history.length - 1],
+          history: tab.history.slice(0, -1),
+        }
+      }) }
+    }))
+  }
+
   function closeTab(windowId: string, tabId: string){
     setSurfaces(current=>current.map(surface=>{
       if(surface.windowId !== windowId) return surface
@@ -208,7 +250,7 @@ export default function Desktop(){
     const target: TabTarget = path.length === 0
       ? { type: 'application', label, appId: 'files' }
       : { type: 'item', label, path, itemType: 'dir', appId: 'files' }
-    replaceTabTarget(windowId, tabId, target)
+    syncTabTarget(windowId, tabId, target)
   }
 
   function closeWindow(id: string){
@@ -238,13 +280,15 @@ export default function Desktop(){
                       apps={apps}
                       vfs={vfs}
                       items={surfaceItems}
-                      recent={recentItems}
+                      recent={recentTargets}
+                      maxRecent={MAX_RECENT_TARGETS}
                       onExecute={(tabId, result, mode)=>executeSurfaceResult(w.id, tabId, result, mode)}
                       onOpenItem={(tabId, path, item)=>executeItemInTab(w.id, tabId, path, item)}
                       onCreateTextFile={newTextFile}
                       onSaveItem={saveFile}
                       onDirectoryChange={(tabId, path)=>updateDirectoryTarget(w.id, tabId, path)}
                       onAddTab={()=>addTab(w.id)}
+                      onBack={tabId=>goBackInTab(w.id, tabId)}
                       onActivateTab={tabId=>activateTab(w.id, tabId)}
                       onCloseTab={tabId=>closeTab(w.id, tabId)}
                     />

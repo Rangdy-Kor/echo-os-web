@@ -11,6 +11,7 @@ type Props = {
   apps: AppDescriptor[]
   items: SurfaceResult[]
   recent?: SurfaceResult[]
+  maxRecent?: number
   active?: boolean
   onExecute: (result: SurfaceResult, mode?: 'current' | 'background-tab') => void
 }
@@ -28,12 +29,23 @@ const suggestedItems: { label: string; itemType: VEntry['type'] }[] = [
   { label: 'Pictures', itemType: 'dir' },
 ]
 
-export default function UniversalSurface({ apps, items, recent = [], active = true, onExecute }: Props){
+function sameResultIdentity(a: SurfaceResult, b: SurfaceResult){
+  if(a.type !== b.type) return false
+  if(a.type === 'Item' && b.type === 'Item'){
+    const aPath = a.path.split('/').filter(Boolean).join('/')
+    const bPath = b.path.split('/').filter(Boolean).join('/')
+    return aPath === bPath
+  }
+  if(a.type === 'Application' && b.type === 'Application') return a.appId === b.appId
+  return a.type === 'Action' && b.type === 'Action' && a.appId === b.appId
+}
+
+export default function UniversalSurface({ apps, items, recent = [], maxRecent = 5, active = true, onExecute }: Props){
   const [query, setQuery] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement | null>(null)
 
-  const results = useMemo<SurfaceResult[]>(()=>{
+  const { results, recentResults, suggestedResults } = useMemo(()=>{
     const actions: SurfaceResult[] = []
     const candidates: SurfaceResult[] = [
       ...actions,
@@ -43,8 +55,10 @@ export default function UniversalSurface({ apps, items, recent = [], active = tr
       ...items,
     ]
     const normalized = query.trim().toLowerCase()
-    if(normalized) return candidates.filter(result=> result.label.toLowerCase().includes(normalized))
-    if(recent.length) return recent
+    if(normalized){
+      const results = candidates.filter(result=> result.label.toLowerCase().includes(normalized))
+      return { results, recentResults: [], suggestedResults: [] }
+    }
 
     const suggested: SurfaceResult[] = suggestedItems.flatMap(suggestion=>{
       const item = items.find(result=>
@@ -56,8 +70,13 @@ export default function UniversalSurface({ apps, items, recent = [], active = tr
     })
     const about = apps.find(app=>app.name === 'About' && app.surfaceVisible !== false)
     if(about) suggested.push({ type: 'Application', label: about.name, appId: about.id })
-    return suggested
-  }, [apps, items, query, recent])
+
+    const recentResults = recent.slice(0, maxRecent)
+    const suggestedResults = suggested
+      .filter(suggestion=>!recentResults.some(target=>sameResultIdentity(target, suggestion)))
+      .slice(0, Math.max(0, maxRecent - recentResults.length))
+    return { results: [...recentResults, ...suggestedResults], recentResults, suggestedResults }
+  }, [apps, items, maxRecent, query, recent])
 
   useEffect(()=>{
     if(active) inputRef.current?.focus()
@@ -93,17 +112,30 @@ export default function UniversalSurface({ apps, items, recent = [], active = tr
           aria-label="Search"
         />
         <div className="universal-surface-results">
-          {!query.trim() && <div className="universal-surface-section-label">{recent.length ? 'Recent' : 'Suggested'}</div>}
           {results.length === 0 && (
             <div className="universal-surface-empty">
               {query.trim() ? 'No results' : 'No suggestions available'}
             </div>
           )}
-          {results.map((result, index)=>(
+          {!query.trim() && recentResults.length > 0 && <div className="universal-surface-section-label">Recent</div>}
+          {(query.trim() ? results : recentResults).map((result, index)=>(
             <button
               key={`${result.type}-${result.label}-${'appId' in result ? result.appId : result.path}`}
               className={`universal-surface-result${index === selectedIndex ? ' selected' : ''}`}
               onMouseEnter={()=>setSelectedIndex(index)}
+              onClick={()=>onExecute(result, 'current')}
+              onAuxClick={event=>{ if(event.button === 1){ event.preventDefault(); onExecute(result, 'background-tab') } }}
+            >
+              <span>{result.label}</span>
+              <span className="universal-surface-result-type">{resultTypeLabel(result)}</span>
+            </button>
+          ))}
+          {!query.trim() && suggestedResults.length > 0 && <div className="universal-surface-section-label">Suggested</div>}
+          {!query.trim() && suggestedResults.map((result, index)=>(
+            <button
+              key={`${result.type}-${result.label}-${'appId' in result ? result.appId : result.path}`}
+              className={`universal-surface-result${index + recentResults.length === selectedIndex ? ' selected' : ''}`}
+              onMouseEnter={()=>setSelectedIndex(index + recentResults.length)}
               onClick={()=>onExecute(result, 'current')}
               onAuxClick={event=>{ if(event.button === 1){ event.preventDefault(); onExecute(result, 'background-tab') } }}
             >

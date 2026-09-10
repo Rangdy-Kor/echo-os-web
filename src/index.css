@@ -63,6 +63,9 @@ body{margin:0;background:linear-gradient(180deg,var(--bg),#071019);color:var(--t
 .universal-surface-section-label{padding-bottom:4px;text-transform:uppercase;letter-spacing:0.08em;opacity:0.7}
 .surface-workspace{height:100%;display:flex;flex-direction:column;min-height:0}
 .surface-tabs{display:flex;align-items:center;gap:4px;padding:6px;border-bottom:1px solid rgba(255,255,255,0.08);overflow-x:auto}
+.surface-tab-back{flex:0 0 auto;width:28px;height:28px;border-radius:6px}
+.surface-tab-back:hover:not(:disabled){background:rgba(95,234,212,0.07)}
+.surface-tab-back:disabled{opacity:0.35;cursor:default}
 .surface-tab{display:flex;align-items:center;gap:8px;min-width:110px;max-width:190px;padding:6px 8px;border-radius:6px;color:var(--muted);cursor:pointer;background:transparent}
 .surface-tab.active{color:var(--text);background:rgba(95,234,212,0.07)}
 .surface-tab-label{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
