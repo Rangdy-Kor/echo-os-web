@@ -272,8 +272,28 @@ export default function Desktop(){
               : w.appId === 'text-viewer'
                 ? { vfs, initialItemPath: w.initialItemPath, onSave: saveFile }
                 : undefined
+            const activeSurfaceTab = surface?.tabs.find(tab=>tab.id === surface.activeTabId)
             return (
-              <Window key={w.id} state={w} onClose={closeWindow} onFocus={wm.focus} onMove={wm.setPos} onResize={wm.setSize} onMinimize={wm.toggleMinimize} onMaximize={wm.toggleMaximize}>
+              <Window
+                key={w.id}
+                state={w}
+                onClose={closeWindow}
+                onFocus={wm.focus}
+                onMove={wm.setPos}
+                onResize={wm.setSize}
+                onMinimize={wm.toggleMinimize}
+                onMaximize={wm.toggleMaximize}
+                titlebarLeading={surface ? (
+                  <button
+                    className="button surface-window-back"
+                    aria-label="Back in Tab"
+                    title="Back in this Tab"
+                    disabled={!activeSurfaceTab?.history.length}
+                    onMouseDown={event=>event.stopPropagation()}
+                    onClick={()=>goBackInTab(w.id, surface.activeTabId)}
+                  >←</button>
+                ) : undefined}
+              >
                 {surface
                   ? <SurfaceWorkspace
                       surface={surface}
@@ -288,7 +308,6 @@ export default function Desktop(){
                       onSaveItem={saveFile}
                       onDirectoryChange={(tabId, path)=>updateDirectoryTarget(w.id, tabId, path)}
                       onAddTab={()=>addTab(w.id)}
-                      onBack={tabId=>goBackInTab(w.id, tabId)}
                       onActivateTab={tabId=>activateTab(w.id, tabId)}
                       onCloseTab={tabId=>closeTab(w.id, tabId)}
                     />

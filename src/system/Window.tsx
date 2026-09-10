@@ -9,10 +9,11 @@ type Props = {
   onResize: (id:string,w:number,h:number,x?:number,y?:number)=>void
   onMinimize: (id:string)=>void
   onMaximize: (id:string)=>void
+  titlebarLeading?: React.ReactNode
   children?: React.ReactNode
 }
 
-export default function Window({ state, onClose, onFocus, onMove, onResize, onMinimize, onMaximize, children }: Props){
+export default function Window({ state, onClose, onFocus, onMove, onResize, onMinimize, onMaximize, titlebarLeading, children }: Props){
   const ref = useRef<HTMLDivElement | null>(null)
   const resizingRef = useRef<{dir:string, startX:number, startY:number, orig: {x:number,y:number,w:number,h:number}} | null>(null)
 
@@ -169,6 +170,7 @@ export default function Window({ state, onClose, onFocus, onMove, onResize, onMi
   return (
     <div ref={ref} className="window" style={{...style, zIndex: state.z}} onMouseDown={()=> onFocus(state.id)}>
       <div className="titlebar">
+        {titlebarLeading}
         <div style={{flex:1}}>{state.title}</div>
         <div style={{display:'flex',gap:8}}>
           <button className="button" onClick={()=>onMinimize(state.id)}>—</button>
