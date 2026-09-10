@@ -22,6 +22,12 @@ function resultTypeLabel(result: SurfaceResult){
   return 'File'
 }
 
+const suggestedItems: { label: string; itemType: VEntry['type'] }[] = [
+  { label: 'welcome.txt', itemType: 'file' },
+  { label: 'Documents', itemType: 'dir' },
+  { label: 'Pictures', itemType: 'dir' },
+]
+
 export default function UniversalSurface({ apps, items, recent = [], active = true, onExecute }: Props){
   const [query, setQuery] = useState('')
   const [selectedIndex, setSelectedIndex] = useState(0)
@@ -37,7 +43,20 @@ export default function UniversalSurface({ apps, items, recent = [], active = tr
       ...items,
     ]
     const normalized = query.trim().toLowerCase()
-    return normalized ? candidates.filter(result=> result.label.toLowerCase().includes(normalized)) : recent
+    if(normalized) return candidates.filter(result=> result.label.toLowerCase().includes(normalized))
+    if(recent.length) return recent
+
+    const suggested: SurfaceResult[] = suggestedItems.flatMap(suggestion=>{
+      const item = items.find(result=>
+        result.type === 'Item' &&
+        result.label === suggestion.label &&
+        result.itemType === suggestion.itemType
+      )
+      return item ? [item] : []
+    })
+    const about = apps.find(app=>app.name === 'About' && app.surfaceVisible !== false)
+    if(about) suggested.push({ type: 'Application', label: about.name, appId: about.id })
+    return suggested
   }, [apps, items, query, recent])
 
   useEffect(()=>{
@@ -74,10 +93,10 @@ export default function UniversalSurface({ apps, items, recent = [], active = tr
           aria-label="Search"
         />
         <div className="universal-surface-results">
-          {!query.trim() && <div className="universal-surface-section-label">Recent</div>}
+          {!query.trim() && <div className="universal-surface-section-label">{recent.length ? 'Recent' : 'Suggested'}</div>}
           {results.length === 0 && (
             <div className="universal-surface-empty">
-              {query.trim() ? 'No results' : 'No recent items yet'}
+              {query.trim() ? 'No results' : 'No suggestions available'}
             </div>
           )}
           {results.map((result, index)=>(
