@@ -5,12 +5,13 @@ type Props = {
   vfs: VEntry
   initialPath?: string[]
   onOpenItem: (path: string[], item: VEntry) => void
+  onCreateTextFile: (directoryPath: string[], fileName: string) => void
   windowId?: string
   onTitleChange?: (windowId: string, title: string) => void
   onPathChange?: (path: string[]) => void
 }
 
-export default function FilesApp({ vfs, initialPath = [], onOpenItem, windowId, onTitleChange, onPathChange }: Props){
+export default function FilesApp({ vfs, initialPath = [], onOpenItem, onCreateTextFile, windowId, onTitleChange, onPathChange }: Props){
   const [cwd, setCwd] = useState<string[]>(() => initialPath.slice())
   const cwdRef = useRef<string[]>(cwd)
   useEffect(() => { cwdRef.current = cwd }, [cwd])
@@ -25,6 +26,7 @@ export default function FilesApp({ vfs, initialPath = [], onOpenItem, windowId, 
 
   // selection state: single-item selection by name within current directory
   const [selected, setSelected] = useState<string | null>(null)
+  const [newFileName, setNewFileName] = useState('')
 
   // root ref to allow sizing to fill parent .content area
   const rootRef = useRef<HTMLDivElement | null>(null)
@@ -79,6 +81,11 @@ export default function FilesApp({ vfs, initialPath = [], onOpenItem, windowId, 
       setSelected(null)
       return fs.slice(0, -1)
     })
+  }
+
+  function newTextFile(){
+    onCreateTextFile(cwdRef.current, newFileName)
+    setNewFileName('')
   }
 
   // Clicking inside the file list: determine whether a li was clicked.
@@ -138,6 +145,8 @@ export default function FilesApp({ vfs, initialPath = [], onOpenItem, windowId, 
           <button className="button" onClick={goBack} disabled={backStack.length===0}>◀ Back</button>
           <button className="button" onClick={goForward} disabled={forwardStack.length===0}>Forward ▶</button>
           <button className="button" onClick={up} disabled={cwd.length===0}>Up</button>
+          <input className="files-new-file-input" aria-label="New text file name" placeholder="File name (.txt optional)" value={newFileName} onChange={event=>setNewFileName(event.target.value)} onKeyDown={event=>{ if(event.key === 'Enter' && newFileName.trim()) newTextFile() }} />
+          <button className="button" onClick={newTextFile} disabled={!newFileName.trim()}>New Text File</button>
         </div>
         <div className="files-path" style={{marginLeft:8,color:'var(--muted)'}}>Path: /{cwd.join('/')}</div>
       </div>

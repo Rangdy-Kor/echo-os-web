@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState } from 'react'
 import type { AppDescriptor } from '../apps/registry'
 import { findApp } from '../apps/registry'
 import type { VEntry } from '../vfs/vfs'
@@ -28,6 +28,7 @@ type Props = {
   recent: SurfaceResult[]
   onExecute: (tabId: string, result: SurfaceResult, mode: 'current' | 'background-tab') => void
   onOpenItem: (tabId: string, path: string[], item: VEntry) => void
+  onCreateTextFile: (directoryPath: string[], fileName: string) => void
   onSaveItem: (path: string[], content: string) => void
   onDirectoryChange: (tabId: string, path: string[]) => void
   onAddTab: () => void
@@ -35,20 +36,33 @@ type Props = {
   onCloseTab: (tabId: string) => void
 }
 
-function tabLabel(tab: SurfaceTab){
-  return tab.target.type === 'empty' ? 'New Tab' : tab.target.label
+function tabLabel(tab: SurfaceTab, dirty = false){
+  const label = tab.target.type === 'empty' ? 'New Tab' : tab.target.label
+  return dirty ? `${label}*` : label
 }
 
-export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, onExecute, onOpenItem, onSaveItem, onDirectoryChange, onAddTab, onActivateTab, onCloseTab }: Props){
+export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, onExecute, onOpenItem, onCreateTextFile, onSaveItem, onDirectoryChange, onAddTab, onActivateTab, onCloseTab }: Props){
+  const [dirtyTabs, setDirtyTabs] = useState<Record<string, { path: string; dirty: boolean }>>({})
+
+  function setTabDirty(tabId: string, path: string, dirty: boolean){
+    setDirtyTabs(current=>current[tabId]?.path === path && current[tabId].dirty === dirty
+      ? current
+      : { ...current, [tabId]: { path, dirty } }
+    )
+  }
+
   return (
     <div className="surface-workspace">
       <div className="surface-tabs" role="tablist" aria-label="Surface tabs">
         {surface.tabs.map(tab=>{
           const active = tab.id === surface.activeTabId
+          const path = tab.target.type === 'item' ? tab.target.path.join('/') : null
+          const dirty = path !== null && dirtyTabs[tab.id]?.path === path && dirtyTabs[tab.id].dirty
+          const label = tabLabel(tab, dirty)
           return (
             <div key={tab.id} className={`surface-tab${active ? ' active' : ''}`} role="tab" aria-selected={active} onClick={()=>onActivateTab(tab.id)}>
-              <span className="surface-tab-label">{tabLabel(tab)}</span>
-              <button className="surface-tab-close" aria-label={`Close ${tabLabel(tab)}`} onClick={event=>{ event.stopPropagation(); onCloseTab(tab.id) }}>×</button>
+              <span className="surface-tab-label">{label}</span>
+              <button className="surface-tab-close" aria-label={`Close ${label}`} onClick={event=>{ event.stopPropagation(); onCloseTab(tab.id) }}>×</button>
             </div>
           )
         })}
@@ -69,9 +83,10 @@ export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, on
               content = <p>Target is unavailable.</p>
             } else if(target.appId === 'files'){
               const initialPath = target.type === 'item' ? target.path : []
-              content = <Comp vfs={vfs} initialPath={initialPath} onOpenItem={(path: string[], item: VEntry)=>onOpenItem(tab.id, path, item)} onPathChange={(path: string[])=>onDirectoryChange(tab.id, path)} />
+              content = <Comp vfs={vfs} initialPath={initialPath} onOpenItem={(path: string[], item: VEntry)=>onOpenItem(tab.id, path, item)} onCreateTextFile={onCreateTextFile} onPathChange={(path: string[])=>onDirectoryChange(tab.id, path)} />
             } else if(target.appId === 'text-viewer' && target.type === 'item'){
-              content = <Comp key={target.path.join('/')} vfs={vfs} initialItemPath={target.path} onSave={onSaveItem} />
+              const path = target.path.join('/')
+              content = <Comp key={path} vfs={vfs} initialItemPath={target.path} onSave={onSaveItem} onDirtyChange={(dirty: boolean)=>setTabDirty(tab.id, path, dirty)} />
             } else {
               content = <Comp />
             }

@@ -4,7 +4,7 @@ import Window from './Window'
 import Taskbar from './Taskbar'
 import { WindowManagerProvider } from './WindowManagerContext'
 import { getApps, findApp } from '../apps/registry'
-import { getInitialVfs, updateFileContent, VEntry } from '../vfs/vfs'
+import { createTextFile, getInitialVfs, updateFileContent, VEntry } from '../vfs/vfs'
 import { type SurfaceResult } from './UniversalSurface'
 import SurfaceWorkspace, { type SurfaceState, type SurfaceTab, type TabTarget } from './SurfaceWorkspace'
 
@@ -172,6 +172,10 @@ export default function Desktop(){
     setVfs(current=>updateFileContent(current, path, content))
   }
 
+  function newTextFile(directoryPath: string[], fileName: string){
+    setVfs(current=>createTextFile(current, directoryPath, fileName))
+  }
+
   function addTab(windowId: string){
     const tab = createEmptyTab()
     setSurfaces(current=>current.map(surface=>surface.windowId === windowId
@@ -222,7 +226,7 @@ export default function Desktop(){
             const app = w.appId ? findApp(w.appId) : undefined
             const Comp = app?.component
             const appProps = w.appId === 'files'
-              ? { vfs, initialPath: w.initialPath, onOpenItem: executeItem, windowId: w.id, onTitleChange: wm.setTitle }
+              ? { vfs, initialPath: w.initialPath, onOpenItem: executeItem, onCreateTextFile: newTextFile, windowId: w.id, onTitleChange: wm.setTitle }
               : w.appId === 'text-viewer'
                 ? { vfs, initialItemPath: w.initialItemPath, onSave: saveFile }
                 : undefined
@@ -237,6 +241,7 @@ export default function Desktop(){
                       recent={recentItems}
                       onExecute={(tabId, result, mode)=>executeSurfaceResult(w.id, tabId, result, mode)}
                       onOpenItem={(tabId, path, item)=>executeItemInTab(w.id, tabId, path, item)}
+                      onCreateTextFile={newTextFile}
                       onSaveItem={saveFile}
                       onDirectoryChange={(tabId, path)=>updateDirectoryTarget(w.id, tabId, path)}
                       onAddTab={()=>addTab(w.id)}
