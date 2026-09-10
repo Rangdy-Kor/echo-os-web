@@ -4,7 +4,7 @@ import Window from './Window'
 import Taskbar from './Taskbar'
 import { WindowManagerProvider } from './WindowManagerContext'
 import { getApps, findApp } from '../apps/registry'
-import { createTextFile, getInitialVfs, updateFileContent, VEntry } from '../vfs/vfs'
+import { createTextFile, getInitialVfs, renameEntry, updateFileContent, VEntry } from '../vfs/vfs'
 import { type SurfaceResult } from './UniversalSurface'
 import SurfaceWorkspace, { type SurfaceState, type SurfaceTab, type TabTarget } from './SurfaceWorkspace'
 
@@ -31,12 +31,26 @@ function recentTargetsMatch(a: RecentTarget, b: RecentTarget){
     : a.type === 'Application' && b.type === 'Application' && a.appId === b.appId
 }
 
+function migratePath(path: string[], oldPath: string[], newPath: string[]){
+  return path.length >= oldPath.length && oldPath.every((part, index)=>path[index] === part)
+    ? [...newPath, ...path.slice(oldPath.length)]
+    : path
+}
+
+function migrateTabTarget(target: TabTarget, oldPath: string[], newPath: string[]): TabTarget{
+  if(target.type !== 'item') return target
+  const path = migratePath(target.path, oldPath, newPath)
+  if(path === target.path) return target
+  return { ...target, path, label: target.path.length === oldPath.length ? newPath[newPath.length - 1] : target.label }
+}
+
 export default function Desktop(){
   const wm = useWindowManager()
   const apps = getApps()
   const [surfaces, setSurfaces] = useState<SurfaceState[]>([])
   const [recentTargets, setRecentTargets] = useState<RecentTarget[]>([])
   const [vfs, setVfs] = useState(getInitialVfs)
+  const [pathMigration, setPathMigration] = useState<{ id: number; oldPath: string[]; newPath: string[] } | null>(null)
 
   function openSurface(){
     const windowId = wm.openGeneric('Surface')
@@ -204,6 +218,36 @@ export default function Desktop(){
     setVfs(current=>createTextFile(current, directoryPath, fileName))
   }
 
+  function renameItem(path: string[], newName: string){
+    const updatedVfs = renameEntry(vfs, path, newName)
+    if(updatedVfs === vfs) return false
+
+    const trimmedName = newName.trim()
+    const newPath = [...path.slice(0, -1), trimmedName]
+    setVfs(updatedVfs)
+    setSurfaces(current=>current.map(surface=>({
+      ...surface,
+      tabs: surface.tabs.map(tab=>({
+        ...tab,
+        target: migrateTabTarget(tab.target, path, newPath),
+        history: tab.history.map(target=>migrateTabTarget(target, path, newPath)),
+      })),
+    })))
+    setRecentTargets(current=>current.map(target=>{
+      if(target.type !== 'Item') return target
+      const targetPath = target.path.split('/').filter(Boolean)
+      const migratedPath = migratePath(targetPath, path, newPath)
+      return migratedPath === targetPath ? target : {
+        ...target,
+        path: migratedPath.join('/'),
+        label: targetPath.length === path.length ? trimmedName : target.label,
+      }
+    }))
+    wm.migrateItemPath(path, newPath)
+    setPathMigration(current=>({ id: (current?.id ?? 0) + 1, oldPath: path, newPath }))
+    return true
+  }
+
   function addTab(windowId: string){
     const tab = createEmptyTab()
     setSurfaces(current=>current.map(surface=>surface.windowId === windowId
@@ -268,7 +312,7 @@ export default function Desktop(){
             const app = w.appId ? findApp(w.appId) : undefined
             const Comp = app?.component
             const appProps = w.appId === 'files'
-              ? { vfs, initialPath: w.initialPath, onOpenItem: executeItem, onCreateTextFile: newTextFile, windowId: w.id, onTitleChange: wm.setTitle }
+              ? { vfs, initialPath: w.initialPath, onOpenItem: executeItem, onCreateTextFile: newTextFile, onRenameItem: renameItem, pathMigration, windowId: w.id, onTitleChange: wm.setTitle }
               : w.appId === 'text-viewer'
                 ? { vfs, initialItemPath: w.initialItemPath, onSave: saveFile }
                 : undefined
@@ -283,6 +327,7 @@ export default function Desktop(){
                 onResize={wm.setSize}
                 onMinimize={wm.toggleMinimize}
                 onMaximize={wm.toggleMaximize}
+                contentClassName={surface ? 'surface-window-content' : undefined}
                 titlebarLeading={surface ? (
                   <button
                     className="button surface-window-back"
@@ -305,6 +350,8 @@ export default function Desktop(){
                       onExecute={(tabId, result, mode)=>executeSurfaceResult(w.id, tabId, result, mode)}
                       onOpenItem={(tabId, path, item)=>executeItemInTab(w.id, tabId, path, item)}
                       onCreateTextFile={newTextFile}
+                      onRenameItem={renameItem}
+                      pathMigration={pathMigration}
                       onSaveItem={saveFile}
                       onDirectoryChange={(tabId, path)=>updateDirectoryTarget(w.id, tabId, path)}
                       onAddTab={()=>addTab(w.id)}

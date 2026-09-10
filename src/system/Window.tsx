@@ -10,10 +10,11 @@ type Props = {
   onMinimize: (id:string)=>void
   onMaximize: (id:string)=>void
   titlebarLeading?: React.ReactNode
+  contentClassName?: string
   children?: React.ReactNode
 }
 
-export default function Window({ state, onClose, onFocus, onMove, onResize, onMinimize, onMaximize, titlebarLeading, children }: Props){
+export default function Window({ state, onClose, onFocus, onMove, onResize, onMinimize, onMaximize, titlebarLeading, contentClassName, children }: Props){
   const ref = useRef<HTMLDivElement | null>(null)
   const resizingRef = useRef<{dir:string, startX:number, startY:number, orig: {x:number,y:number,w:number,h:number}} | null>(null)
 
@@ -178,7 +179,7 @@ export default function Window({ state, onClose, onFocus, onMove, onResize, onMi
           <button className="button" onClick={()=>onClose(state.id)}>✕</button>
         </div>
       </div>
-      <div className="content">
+      <div className={`content${contentClassName ? ` ${contentClassName}` : ''}`}>
         {children}
       </div>
 

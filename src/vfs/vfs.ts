@@ -82,3 +82,39 @@ export function createTextFile(root: VEntry, directoryPath: string[], fileName: 
 
   return createInDirectory(root, 0)
 }
+
+export function renameEntry(root: VEntry, pathParts: string[], newName: string): VEntry{
+  const name = newName.trim()
+  if(pathParts.length === 0 || !name || name.includes('/')) return root
+
+  const parentPath = pathParts.slice(0, -1)
+  const oldName = pathParts[pathParts.length - 1]
+
+  function renameInParent(entry: VEntry, pathIndex: number): VEntry{
+    if(pathIndex === parentPath.length){
+      if(entry.type !== 'dir' || !entry.children) return entry
+      const targetIndex = entry.children.findIndex(child=>child.name === oldName)
+      if(targetIndex === -1 || entry.children.some((child, index)=>index !== targetIndex && child.name === name)) return entry
+
+      const target = entry.children[targetIndex]
+      if(target.name === name) return entry
+      const children = entry.children.slice()
+      children[targetIndex] = { ...target, name }
+      return { ...entry, children }
+    }
+
+    if(entry.type !== 'dir' || !entry.children) return entry
+    const childIndex = entry.children.findIndex(child=>child.name === parentPath[pathIndex])
+    if(childIndex === -1) return entry
+
+    const child = entry.children[childIndex]
+    const updatedChild = renameInParent(child, pathIndex + 1)
+    if(updatedChild === child) return entry
+
+    const children = entry.children.slice()
+    children[childIndex] = updatedChild
+    return { ...entry, children }
+  }
+
+  return renameInParent(root, 0)
+}

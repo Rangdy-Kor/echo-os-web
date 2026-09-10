@@ -26,6 +26,7 @@ export type WindowManagerAPI = {
   close: (id:string)=>void
   focus: (id:string)=>void
   setTitle: (id:string, title:string)=>void
+  migrateItemPath: (oldPath:string[], newPath:string[])=>void
   setPos: (id:string, x:number,y:number)=>void
   setSize: (id:string, w:number,h:number,x?:number,y?:number)=>void
   toggleMinimize: (id:string)=>void
@@ -92,10 +93,22 @@ export default function useWindowManager(): WindowManagerAPI{
   }),[])
 
   const setTitle = useCallback((id:string, title:string)=> setWindows(ws=> ws.map(w=> w.id===id && w.title!==title?{...w,title}:w)),[])
+  const migrateItemPath = useCallback((oldPath:string[], newPath:string[])=> setWindows(ws=>ws.map(window=>{
+    function migrate(path?: string[]){
+      if(!path || path.length < oldPath.length || !oldPath.every((part, index)=>path[index] === part)) return path
+      return [...newPath, ...path.slice(oldPath.length)]
+    }
+    const initialPath = migrate(window.initialPath)
+    const initialItemPath = migrate(window.initialItemPath)
+    const renamedTarget = window.initialItemPath?.length === oldPath.length && oldPath.every((part, index)=>window.initialItemPath?.[index] === part)
+    return initialPath === window.initialPath && initialItemPath === window.initialItemPath
+      ? window
+      : { ...window, initialPath, initialItemPath, title: renamedTarget ? newPath[newPath.length - 1] : window.title }
+  })),[])
   const setPos = useCallback((id:string, x:number,y:number)=> setWindows(ws=> ws.map(w=> w.id===id?{...w,x,y}:w)),[])
   const setSize = useCallback((id:string, w:number,h:number, x?:number,y?:number)=> setWindows(ws=> ws.map(win=> win.id===id?{...win, w: Math.max(w, win.minW ?? 0), h: Math.max(h, win.minH ?? 0), x: x!==undefined?x:win.x, y: y!==undefined?y:win.y}:win)),[])
   const toggleMinimize = useCallback((id:string)=> setWindows(ws=> ws.map(w=> w.id===id?{...w, minimized: !w.minimized}:w)),[])
   const toggleMaximize = useCallback((id:string)=> setWindows(ws=> ws.map(w=> w.id===id?{...w, maximized: !w.maximized}:w)),[])
 
-  return { windows, open, openGeneric, attachApplication, close, focus, setTitle, setPos, setSize, toggleMinimize, toggleMaximize }
+  return { windows, open, openGeneric, attachApplication, close, focus, setTitle, migrateItemPath, setPos, setSize, toggleMinimize, toggleMaximize }
 }

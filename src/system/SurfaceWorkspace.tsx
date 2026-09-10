@@ -31,6 +31,8 @@ type Props = {
   onExecute: (tabId: string, result: SurfaceResult, mode: 'current' | 'background-tab') => void
   onOpenItem: (tabId: string, path: string[], item: VEntry) => void
   onCreateTextFile: (directoryPath: string[], fileName: string) => void
+  onRenameItem: (path: string[], newName: string) => boolean
+  pathMigration: { id: number; oldPath: string[]; newPath: string[] } | null
   onSaveItem: (path: string[], content: string) => void
   onDirectoryChange: (tabId: string, path: string[]) => void
   onAddTab: () => void
@@ -43,7 +45,7 @@ function tabLabel(tab: SurfaceTab, dirty = false){
   return dirty ? `${label}*` : label
 }
 
-export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, maxRecent, onExecute, onOpenItem, onCreateTextFile, onSaveItem, onDirectoryChange, onAddTab, onActivateTab, onCloseTab }: Props){
+export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, maxRecent, onExecute, onOpenItem, onCreateTextFile, onRenameItem, pathMigration, onSaveItem, onDirectoryChange, onAddTab, onActivateTab, onCloseTab }: Props){
   const [dirtyTabs, setDirtyTabs] = useState<Record<string, { path: string; dirty: boolean }>>({})
 
   function setTabDirty(tabId: string, path: string, dirty: boolean){
@@ -85,7 +87,7 @@ export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, ma
               content = <p>Target is unavailable.</p>
             } else if(target.appId === 'files'){
               const initialPath = target.type === 'item' ? target.path : []
-              content = <Comp vfs={vfs} initialPath={initialPath} onOpenItem={(path: string[], item: VEntry)=>onOpenItem(tab.id, path, item)} onCreateTextFile={onCreateTextFile} onPathChange={(path: string[])=>onDirectoryChange(tab.id, path)} />
+              content = <Comp vfs={vfs} initialPath={initialPath} onOpenItem={(path: string[], item: VEntry)=>onOpenItem(tab.id, path, item)} onCreateTextFile={onCreateTextFile} onRenameItem={onRenameItem} pathMigration={pathMigration} onPathChange={(path: string[])=>onDirectoryChange(tab.id, path)} />
             } else if(target.appId === 'text-viewer' && target.type === 'item'){
               const path = target.path.join('/')
               content = <Comp key={path} vfs={vfs} initialItemPath={target.path} onSave={onSaveItem} onDirtyChange={(dirty: boolean)=>setTabDirty(tab.id, path, dirty)} />
