@@ -29,3 +29,27 @@ export function findEntry(pathParts: string[], root: VEntry): VEntry | null{
   }
   return node ?? null
 }
+
+export function updateFileContent(root: VEntry, pathParts: string[], content: string): VEntry{
+  function updateEntry(entry: VEntry, pathIndex: number): VEntry{
+    if(pathIndex === pathParts.length){
+      if(entry.type !== 'file' || entry.content === content) return entry
+      return { ...entry, content }
+    }
+
+    if(entry.type !== 'dir' || !entry.children) return entry
+
+    const childIndex = entry.children.findIndex(child=>child.name === pathParts[pathIndex])
+    if(childIndex === -1) return entry
+
+    const child = entry.children[childIndex]
+    const updatedChild = updateEntry(child, pathIndex + 1)
+    if(updatedChild === child) return entry
+
+    const children = entry.children.slice()
+    children[childIndex] = updatedChild
+    return { ...entry, children }
+  }
+
+  return updateEntry(root, 0)
+}
