@@ -25,8 +25,6 @@ function resultTypeLabel(result: SurfaceResult){
 
 const suggestedItems: { label: string; itemType: VEntry['type'] }[] = [
   { label: 'welcome.txt', itemType: 'file' },
-  { label: 'Documents', itemType: 'dir' },
-  { label: 'Pictures', itemType: 'dir' },
 ]
 
 function sameResultIdentity(a: SurfaceResult, b: SurfaceResult){
@@ -68,6 +66,7 @@ export default function UniversalSurface({ apps, items, recent = [], maxRecent =
       )
       return item ? [item] : []
     })
+    suggested.push({ type: 'Item', label: 'Home', path: '', itemType: 'dir' })
     const about = apps.find(app=>app.name === 'About' && app.surfaceVisible !== false)
     if(about) suggested.push({ type: 'Application', label: about.name, appId: about.id })
 

@@ -183,9 +183,10 @@ export default function Desktop(){
         } else {
           const surface = surfaces.find(candidate=>candidate.windowId === windowId)
           const existingTab = surface?.tabs.find(tab=>
-            tab.target.type === 'item' &&
-            tab.target.path.length === path.length &&
-            tab.target.path.every((part, index)=>part === path[index])
+            (tab.target.type === 'item' &&
+              tab.target.path.length === path.length &&
+              tab.target.path.every((part, index)=>part === path[index])) ||
+            (path.length === 0 && tab.target.type === 'application' && tab.target.appId === 'files')
           )
           if(existingTab) activateTab(windowId, existingTab.id)
           else replaceTabTarget(windowId, tabId, target)
@@ -311,7 +312,7 @@ export default function Desktop(){
   }
 
   function updateDirectoryTarget(windowId: string, tabId: string, path: string[]){
-    const label = path.length === 0 ? 'Files' : path[path.length - 1]
+    const label = path.length === 0 ? 'Home' : path[path.length - 1]
     const target: TabTarget = path.length === 0
       ? { type: 'application', label, appId: 'files' }
       : { type: 'item', label, path, itemType: 'dir', appId: 'files' }
@@ -358,7 +359,7 @@ export default function Desktop(){
                     disabled={!activeSurfaceTab?.history.length}
                     onMouseDown={event=>event.stopPropagation()}
                     onClick={()=>goBackInTab(w.id, surface.activeTabId)}
-                  >←</button>
+                  >🡄</button>
                 ) : undefined}
               >
                 {surface

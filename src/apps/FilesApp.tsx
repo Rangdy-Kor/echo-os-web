@@ -215,7 +215,7 @@ export default function FilesApp({ vfs, initialPath = [], onOpenItem, onCreateTe
 
   function openContextMenu(event: React.MouseEvent){
     const target = event.target as HTMLElement
-    if(target.closest('.files-nav, .files-path, h3, .files-inline-rename')) return
+    if(target.closest('.files-nav, .files-path, .files-inline-rename')) return
     const root = rootRef.current
     if(!root) return
     event.preventDefault()
@@ -245,7 +245,6 @@ export default function FilesApp({ vfs, initialPath = [], onOpenItem, onCreateTe
 
   return (
     <div ref={rootRef} className="files-app" onClick={onRootClick} onContextMenu={openContextMenu}>
-      <h3>Files</h3>
       <div className="files-header">
         <div className="files-nav">
           <button className="button" onClick={goBack} disabled={backStack.length === 0}>◀ Back</button>
