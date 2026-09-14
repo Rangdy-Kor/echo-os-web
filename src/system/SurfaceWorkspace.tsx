@@ -28,16 +28,20 @@ type Props = {
   items: SurfaceResult[]
   recent: SurfaceResult[]
   maxRecent: number
+  active: boolean
   onExecute: (tabId: string, result: SurfaceResult, mode: 'current' | 'background-tab') => void
   onOpenItem: (tabId: string, path: string[], item: VEntry) => void
   onCreateTextFile: (directoryPath: string[], fileName: string) => void
+  onCreateFolder: (directoryPath: string[], folderName: string) => void
   onRenameItem: (path: string[], newName: string) => string | null
+  onDeleteItem: (path: string[]) => boolean
   pathMigration: { id: number; oldPath: string[]; newPath: string[] } | null
   onSaveItem: (path: string[], content: string) => void
   onDirectoryChange: (tabId: string, path: string[]) => void
   onAddTab: () => void
   onActivateTab: (tabId: string) => void
   onCloseTab: (tabId: string) => void
+  onBack: (tabId: string) => void
 }
 
 function tabLabel(tab: SurfaceTab, dirty = false){
@@ -45,7 +49,7 @@ function tabLabel(tab: SurfaceTab, dirty = false){
   return dirty ? `${label}*` : label
 }
 
-export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, maxRecent, onExecute, onOpenItem, onCreateTextFile, onRenameItem, pathMigration, onSaveItem, onDirectoryChange, onAddTab, onActivateTab, onCloseTab }: Props){
+export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, maxRecent, active: surfaceActive, onExecute, onOpenItem, onCreateTextFile, onCreateFolder, onRenameItem, onDeleteItem, pathMigration, onSaveItem, onDirectoryChange, onAddTab, onActivateTab, onCloseTab, onBack }: Props){
   const [dirtyTabs, setDirtyTabs] = useState<Record<string, { path: string; dirty: boolean }>>({})
 
   function setTabDirty(tabId: string, path: string, dirty: boolean){
@@ -87,10 +91,10 @@ export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, ma
               content = <p>Target is unavailable.</p>
             } else if(target.appId === 'files'){
               const initialPath = target.type === 'item' ? target.path : []
-              content = <Comp vfs={vfs} initialPath={initialPath} onOpenItem={(path: string[], item: VEntry)=>onOpenItem(tab.id, path, item)} onCreateTextFile={onCreateTextFile} onRenameItem={onRenameItem} pathMigration={pathMigration} onPathChange={(path: string[])=>onDirectoryChange(tab.id, path)} />
+              content = <Comp vfs={vfs} initialPath={initialPath} active={surfaceActive && active} onOpenItem={(path: string[], item: VEntry)=>onOpenItem(tab.id, path, item)} onCreateTextFile={onCreateTextFile} onCreateFolder={onCreateFolder} onRenameItem={onRenameItem} onDeleteItem={onDeleteItem} pathMigration={pathMigration} onPathChange={(path: string[])=>onDirectoryChange(tab.id, path)} />
             } else if(target.appId === 'text-viewer' && target.type === 'item'){
               const path = target.path.join('/')
-              content = <Comp key={path} vfs={vfs} initialItemPath={target.path} onSave={onSaveItem} onDirtyChange={(dirty: boolean)=>setTabDirty(tab.id, path, dirty)} />
+              content = <Comp key={path} vfs={vfs} initialItemPath={target.path} active={surfaceActive && active} onSave={onSaveItem} onBack={tab.history.length > 0 ? ()=>onBack(tab.id) : undefined} onDirtyChange={(dirty: boolean)=>setTabDirty(tab.id, path, dirty)} />
             } else {
               content = <Comp />
             }

@@ -83,6 +83,63 @@ export function createTextFile(root: VEntry, directoryPath: string[], fileName: 
   return createInDirectory(root, 0)
 }
 
+export function createFolder(root: VEntry, directoryPath: string[], folderName: string): VEntry{
+  const name = folderName.trim()
+  if(!name || name.includes('/')) return root
+
+  function createInDirectory(entry: VEntry, pathIndex: number): VEntry{
+    if(pathIndex === directoryPath.length){
+      if(entry.type !== 'dir' || entry.children?.some(child=>child.name === name)) return entry
+      return { ...entry, children: [...(entry.children ?? []), { name, type: 'dir', children: [] }] }
+    }
+
+    if(entry.type !== 'dir' || !entry.children) return entry
+
+    const childIndex = entry.children.findIndex(child=>child.name === directoryPath[pathIndex])
+    if(childIndex === -1) return entry
+
+    const child = entry.children[childIndex]
+    const updatedChild = createInDirectory(child, pathIndex + 1)
+    if(updatedChild === child) return entry
+
+    const children = entry.children.slice()
+    children[childIndex] = updatedChild
+    return { ...entry, children }
+  }
+
+  return createInDirectory(root, 0)
+}
+
+export function deleteEntry(root: VEntry, pathParts: string[]): VEntry{
+  if(pathParts.length === 0) return root
+
+  const parentPath = pathParts.slice(0, -1)
+  const targetName = pathParts[pathParts.length - 1]
+
+  function deleteFromParent(entry: VEntry, pathIndex: number): VEntry{
+    if(pathIndex === parentPath.length){
+      if(entry.type !== 'dir' || !entry.children) return entry
+      const targetIndex = entry.children.findIndex(child=>child.name === targetName)
+      if(targetIndex === -1) return entry
+      return { ...entry, children: entry.children.filter((_, index)=>index !== targetIndex) }
+    }
+
+    if(entry.type !== 'dir' || !entry.children) return entry
+    const childIndex = entry.children.findIndex(child=>child.name === parentPath[pathIndex])
+    if(childIndex === -1) return entry
+
+    const child = entry.children[childIndex]
+    const updatedChild = deleteFromParent(child, pathIndex + 1)
+    if(updatedChild === child) return entry
+
+    const children = entry.children.slice()
+    children[childIndex] = updatedChild
+    return { ...entry, children }
+  }
+
+  return deleteFromParent(root, 0)
+}
+
 export function getCollisionSafeName(requestedName: string, siblingNames: string[], currentName: string){
   const occupiedNames = new Set(siblingNames.filter(name=>name !== currentName))
   if(!occupiedNames.has(requestedName)) return requestedName

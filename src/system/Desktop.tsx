@@ -4,7 +4,7 @@ import Window from './Window'
 import Taskbar from './Taskbar'
 import { WindowManagerProvider } from './WindowManagerContext'
 import { getApps, findApp } from '../apps/registry'
-import { createTextFile, findEntry, getInitialVfs, renameEntry, updateFileContent, VEntry } from '../vfs/vfs'
+import { createFolder, createTextFile, deleteEntry, findEntry, getInitialVfs, renameEntry, updateFileContent, VEntry } from '../vfs/vfs'
 import { type SurfaceResult } from './UniversalSurface'
 import SurfaceWorkspace, { type SurfaceState, type SurfaceTab, type TabTarget } from './SurfaceWorkspace'
 
@@ -218,6 +218,22 @@ export default function Desktop(){
     setVfs(current=>createTextFile(current, directoryPath, fileName))
   }
 
+  function newFolder(directoryPath: string[], folderName: string){
+    setVfs(current=>createFolder(current, directoryPath, folderName))
+  }
+
+  function deleteItem(path: string[]){
+    const updatedVfs = deleteEntry(vfs, path)
+    if(updatedVfs === vfs) return false
+    setVfs(updatedVfs)
+    setRecentTargets(current=>current.filter(target=>{
+      if(target.type !== 'Item') return true
+      const targetPath = target.path.split('/').filter(Boolean)
+      return !(targetPath.length >= path.length && path.every((part, index)=>targetPath[index] === part))
+    }))
+    return true
+  }
+
   function renameItem(path: string[], newName: string){
     const updatedVfs = renameEntry(vfs, path, newName)
     if(updatedVfs === vfs) return null
@@ -316,10 +332,11 @@ export default function Desktop(){
             const surface = surfaces.find(candidate=>candidate.windowId === w.id)
             const app = w.appId ? findApp(w.appId) : undefined
             const Comp = app?.component
+            const activeWindow = !w.minimized && w.z === Math.max(...wm.windows.filter(window=>!window.minimized).map(window=>window.z))
             const appProps = w.appId === 'files'
-              ? { vfs, initialPath: w.initialPath, onOpenItem: executeItem, onCreateTextFile: newTextFile, onRenameItem: renameItem, pathMigration, windowId: w.id, onTitleChange: wm.setTitle }
+              ? { vfs, initialPath: w.initialPath, active: activeWindow, onOpenItem: executeItem, onCreateTextFile: newTextFile, onCreateFolder: newFolder, onRenameItem: renameItem, onDeleteItem: deleteItem, pathMigration, windowId: w.id, onTitleChange: wm.setTitle }
               : w.appId === 'text-viewer'
-                ? { vfs, initialItemPath: w.initialItemPath, onSave: saveFile }
+                ? { vfs, initialItemPath: w.initialItemPath, active: activeWindow, onSave: saveFile }
                 : undefined
             const activeSurfaceTab = surface?.tabs.find(tab=>tab.id === surface.activeTabId)
             return (
@@ -352,16 +369,20 @@ export default function Desktop(){
                       items={surfaceItems}
                       recent={recentTargets}
                       maxRecent={MAX_RECENT_TARGETS}
+                      active={activeWindow}
                       onExecute={(tabId, result, mode)=>executeSurfaceResult(w.id, tabId, result, mode)}
                       onOpenItem={(tabId, path, item)=>executeItemInTab(w.id, tabId, path, item)}
                       onCreateTextFile={newTextFile}
+                      onCreateFolder={newFolder}
                       onRenameItem={renameItem}
+                      onDeleteItem={deleteItem}
                       pathMigration={pathMigration}
                       onSaveItem={saveFile}
                       onDirectoryChange={(tabId, path)=>updateDirectoryTarget(w.id, tabId, path)}
                       onAddTab={()=>addTab(w.id)}
                       onActivateTab={tabId=>activateTab(w.id, tabId)}
                       onCloseTab={tabId=>closeTab(w.id, tabId)}
+                      onBack={tabId=>goBackInTab(w.id, tabId)}
                     />
                   : Comp ? <Comp {...appProps} /> : <div className="generic-workspace"><p>What do you want to do?</p></div>}
               </Window>

@@ -8,8 +8,11 @@ type Props = {
   initialPath?: string[]
   onOpenItem: (path: string[], item: VEntry) => void
   onCreateTextFile: (directoryPath: string[], fileName: string) => void
+  onCreateFolder: (directoryPath: string[], folderName: string) => void
   onRenameItem: (path: string[], newName: string) => string | null
+  onDeleteItem: (path: string[]) => boolean
   pathMigration?: PathMigration | null
+  active?: boolean
   windowId?: string
   onTitleChange?: (windowId: string, title: string) => void
   onPathChange?: (path: string[]) => void
@@ -24,7 +27,7 @@ function migratePath(path: string[], migration: PathMigration){
     : path
 }
 
-export default function FilesApp({ vfs, initialPath = [], onOpenItem, onCreateTextFile, onRenameItem, pathMigration, windowId, onTitleChange, onPathChange }: Props){
+export default function FilesApp({ vfs, initialPath = [], onOpenItem, onCreateTextFile, onCreateFolder, onRenameItem, onDeleteItem, pathMigration, active = true, windowId, onTitleChange, onPathChange }: Props){
   const [cwd, setCwd] = useState<string[]>(() => initialPath.slice())
   const cwdRef = useRef<string[]>(cwd)
   const rootRef = useRef<HTMLDivElement | null>(null)
@@ -73,6 +76,11 @@ export default function FilesApp({ vfs, initialPath = [], onOpenItem, onCreateTe
 
   const node = findEntry(cwd.length ? cwd : [''], vfs) as VEntry | null
   const children = node?.type === 'dir' ? node.children ?? [] : []
+
+  useEffect(()=>{
+    if(selected && !children.some(child=>child.name === selected)) setSelected(null)
+    if(renaming && !children.some(child=>child.name === renaming.originalName)) setRenaming(null)
+  },[children, selected, renaming?.originalName])
 
   function canEnter(dirName: string){
     return findEntry([...cwd, dirName], vfs)?.type === 'dir'
@@ -130,16 +138,60 @@ export default function FilesApp({ vfs, initialPath = [], onOpenItem, onCreateTe
   function createNewTextFile(){
     const name = defaultTextFileName()
     onCreateTextFile(cwdRef.current, name)
-    setContextMenu(null)
-    setSelected(name)
-    setRenaming({ originalName: name, draft: name, mode: 'new-text' })
+    startRename(name, 'new-text')
   }
 
-  function startRename(name: string){
+  function createNewFolder(){
+    const base = 'New Folder'
+    let index = 0
+    let name = base
+    while(children.some(child=>child.name === name)){
+      index += 1
+      name = `${base} (${index})`
+    }
+    onCreateFolder(cwdRef.current, name)
+    startRename(name)
+  }
+
+  function startRename(name: string, mode: RenameState['mode'] = 'existing'){
     setContextMenu(null)
     setSelected(name)
-    setRenaming({ originalName: name, draft: name, mode: 'existing' })
+    setRenaming({ originalName: name, draft: name, mode })
   }
+
+  function deleteSelectedItem(name: string){
+    const deleted = onDeleteItem([...cwdRef.current, name])
+    setContextMenu(null)
+    if(!deleted) return
+    setSelected(null)
+    setRenaming(current=>current?.originalName === name ? null : current)
+  }
+
+  useEffect(()=>{
+    if(!active) return
+
+    function isEditableTarget(target: EventTarget | null){
+      const element = target instanceof HTMLElement ? target : null
+      return !!element?.closest('input, textarea, select, [contenteditable="true"]')
+    }
+
+    function onKeyDown(event: KeyboardEvent){
+      if(isEditableTarget(event.target)) return
+      if(event.key === 'F2' && selected && !renaming){
+        event.preventDefault()
+        startRename(selected)
+      } else if(event.key === 'Backspace' && backStack.length > 0){
+        event.preventDefault()
+        goBack()
+      } else if(event.key === 'Delete' && selected){
+        event.preventDefault()
+        deleteSelectedItem(selected)
+      }
+    }
+
+    document.addEventListener('keydown', onKeyDown)
+    return ()=>document.removeEventListener('keydown', onKeyDown)
+  },[active, selected, renaming, backStack])
 
   function finishRename(){
     if(!renaming) return
@@ -171,9 +223,10 @@ export default function FilesApp({ vfs, initialPath = [], onOpenItem, onCreateTe
     if(entryName) setSelected(entryName)
     const rect = root.getBoundingClientRect()
     const width = 150
-    const height = 38
+    const height = 72
+    const requiredWidth = entryName ? width : width * 2
     setContextMenu({
-      x: Math.max(0, Math.min(event.clientX - rect.left, rect.width - width)),
+      x: Math.max(0, Math.min(event.clientX - rect.left, rect.width - requiredWidth)),
       y: Math.max(0, Math.min(event.clientY - rect.top, rect.height - height)),
       entryName,
     })
@@ -242,9 +295,24 @@ export default function FilesApp({ vfs, initialPath = [], onOpenItem, onCreateTe
 
       {contextMenu && (
         <div className="files-context-menu" style={{left:contextMenu.x,top:contextMenu.y}} onPointerDown={event=>event.stopPropagation()}>
-          <button className="button" onClick={()=>contextMenu.entryName ? startRename(contextMenu.entryName) : createNewTextFile()}>
-            {contextMenu.entryName ? 'Rename' : 'New Text File'}
-          </button>
+          {contextMenu.entryName ? (
+            <>
+              <button className="button" onClick={()=>startRename(contextMenu.entryName!)}>Rename</button>
+              <button className="button" onClick={()=>deleteSelectedItem(contextMenu.entryName!)}>Delete</button>
+            </>
+          ) : (
+            <>
+              <button className="button" onClick={createNewFolder}>New Folder</button>
+              <div className="files-context-submenu-trigger">
+                <button className="button files-context-submenu-label" aria-haspopup="menu">
+                  <span>New File</span><span aria-hidden="true">›</span>
+                </button>
+                <div className="files-context-submenu" role="menu">
+                  <button className="button" role="menuitem" onClick={createNewTextFile}>Text File</button>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>
