@@ -42,7 +42,9 @@ Echo OS의 관점은 Application의 제거가 아닙니다. Application은 사�
 - File과 Directory의 Item 실행 및 같은 Surface 내 Item reuse
 - 공유 Virtual File System과 Files
 - `.txt` Item의 편집 및 저장이 가능한 Text Editor
-- 새 Text File 생성
+- 새 Text File과 Folder 생성
+- File/Folder Rename 및 Delete
+- Files Context Menu와 F2 / Backspace / Ctrl+S 등 기초적인 키보드 조작
 - 편집 중인 Text Tab의 dirty 상태 표시
 - 최근 실행한 Item을 보여주는 in-memory Recent
 - Recent가 없을 때 표시되는 Suggested
@@ -63,10 +65,10 @@ Echo OS는 현재 기능을 **구현 → 직접 사용 → 문제 발견 → 필
 
 ### 2차 로드맵 — 실제 작업성과 Surface 확장 (진행 중)
 
-- **Phase 7 — 실제 작업 능력**: Shared VFS, Text Edit/Save, Item CRUD를 통해 Surface 안에서 실제 작업이 가능하도록 만듭니다. 현재 이 단계의 후반부이며, New Folder와 Delete가 주요 남은 항목입니다.
-- **Phase 8 — Tab을 작업 단위로 강화**: Tab reorder 등, Tab 자체를 더 완전한 작업 단위로 만드는 기능을 검증합니다. 필요성이 먼저 발견된 Target Back history는 이미 구현했습니다.
-- **Phase 9 — Surface 경계 상호작용**: Surface 간 Tab Drag & Drop과 tear-off처럼, 사용자가 명시적으로 Surface 경계를 넘는 상호작용을 실험합니다.
-- **Phase 10 — 작업 Context 지속성**: Surface rename, Surface/Tab 상태 persistence, 필요 시 Recent persistence를 추가합니다.
+- [x] **Phase 7 — 실제 작업 능력**: Shared VFS, Text Edit/Save, Item CRUD와 기본 Files 조작을 통해 Surface 안에서 실제 작업이 가능하도록 만듭니다. New File/Folder 생성, Rename, Delete와 기본 키보드 조작까지 구현했습니다.
+- [ ] **Phase 8 — Tab을 작업 단위로 강화**: Tab reorder 등, Tab 자체를 더 완전한 작업 단위로 만드는 기능을 검증합니다. 필요성이 먼저 발견된 Target Back history는 이미 구현했습니다.
+- [ ] **Phase 9 — Surface 경계 상호작용**: Surface 간 Tab Drag & Drop과 tear-off처럼, 사용자가 명시적으로 Surface 경계를 넘는 상호작용을 실험합니다.
+- [ ] **Phase 10 — 작업 Context 지속성**: Surface rename, Surface/Tab 상태 persistence, 필요 시 Recent persistence를 추가합니다.
 
 AI, Split View, 별도 Workspace 계층, 범용 Capability/Handler framework, 실제 파일 시스템/OPFS 전환 등은 3차 로드맵 이후로 미뤄두고 있습니다.
 

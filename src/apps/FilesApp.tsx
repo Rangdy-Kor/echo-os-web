@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { findEntry, getCollisionSafeName, getNewTextFileRenameCandidate, VEntry } from '../vfs/vfs'
 
 type PathMigration = { id: number; oldPath: string[]; newPath: string[] }
@@ -32,12 +32,14 @@ export default function FilesApp({ vfs, initialPath = [], onOpenItem, onCreateTe
   const cwdRef = useRef<string[]>(cwd)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const renameInputRef = useRef<HTMLInputElement | null>(null)
+  const renameMeasureRef = useRef<HTMLSpanElement | null>(null)
   const renameCancelledRef = useRef(false)
   const [backStack, setBackStack] = useState<string[][]>([])
   const [forwardStack, setForwardStack] = useState<string[][]>([])
   const [selected, setSelected] = useState<string | null>(null)
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [renaming, setRenaming] = useState<RenameState | null>(null)
+  const [renameInputWidth, setRenameInputWidth] = useState(96)
 
   useEffect(() => { cwdRef.current = cwd }, [cwd])
   useEffect(() => {
@@ -73,6 +75,31 @@ export default function FilesApp({ vfs, initialPath = [], onOpenItem, onCreateTe
     renameInputRef.current?.focus()
     renameInputRef.current?.select()
   },[renaming?.originalName])
+
+  useLayoutEffect(()=>{
+    const input = renameInputRef.current
+    const measure = renameMeasureRef.current
+    if(!renaming || !input || !measure) return
+
+    function updateWidth(){
+      const inputStyle = getComputedStyle(input)
+      const horizontalChrome = parseFloat(inputStyle.paddingLeft) + parseFloat(inputStyle.paddingRight)
+        + parseFloat(inputStyle.borderLeftWidth) + parseFloat(inputStyle.borderRightWidth)
+      const measuredWidth = Math.ceil(measure.getBoundingClientRect().width + horizontalChrome + 12)
+      const list = input.closest('.file-list') as HTMLElement | null
+      const listRect = list?.getBoundingClientRect()
+      const inputRect = input.getBoundingClientRect()
+      const leadingWidth = listRect && list ? inputRect.left - listRect.left + list.scrollLeft : 28
+      const maximumWidth = Math.max(48, (list?.clientWidth ?? rootRef.current?.clientWidth ?? measuredWidth) - leadingWidth - 8)
+      setRenameInputWidth(Math.min(maximumWidth, Math.max(96, measuredWidth)))
+    }
+
+    updateWidth()
+    const resizeObserver = new ResizeObserver(updateWidth)
+    const viewport = input.closest('.file-list') ?? rootRef.current
+    if(viewport) resizeObserver.observe(viewport)
+    return ()=>resizeObserver.disconnect()
+  },[renaming?.draft])
 
   const node = findEntry(cwd.length ? cwd : [''], vfs) as VEntry | null
   const children = node?.type === 'dir' ? node.children ?? [] : []
@@ -271,22 +298,28 @@ export default function FilesApp({ vfs, initialPath = [], onOpenItem, onCreateTe
           >
             <span aria-hidden="true">{entry.type === 'dir' ? '📁' : '📄'}</span>{' '}
             {renaming?.originalName === entry.name ? (
-              <input
-                ref={renameInputRef}
-                className="files-inline-rename"
-                aria-label={`Rename ${entry.name}`}
-                value={renaming.draft}
-                onClick={event=>event.stopPropagation()}
-                onChange={event=>setRenaming(current=>current ? { ...current, draft: event.target.value } : current)}
-                onKeyDown={event=>{
-                  if(event.key === 'Enter') event.currentTarget.blur()
-                  if(event.key === 'Escape'){
-                    renameCancelledRef.current = true
-                    event.currentTarget.blur()
-                  }
-                }}
-                onBlur={finishRename}
-              />
+              <>
+                <input
+                  ref={renameInputRef}
+                  className="files-inline-rename"
+                  style={{ width: renameInputWidth }}
+                  aria-label={`Rename ${entry.name}`}
+                  value={renaming.draft}
+                  onClick={event=>event.stopPropagation()}
+                  onChange={event=>setRenaming(current=>current ? { ...current, draft: event.target.value } : current)}
+                  onKeyDown={event=>{
+                    if(event.key === 'Enter') event.currentTarget.blur()
+                    if(event.key === 'Escape'){
+                      renameCancelledRef.current = true
+                      event.currentTarget.blur()
+                    }
+                  }}
+                  onBlur={finishRename}
+                />
+                <span ref={renameMeasureRef} className="files-inline-rename-measure" aria-hidden="true">
+                  {renaming.draft || ' '}
+                </span>
+              </>
             ) : entry.name}
           </li>
         ))}

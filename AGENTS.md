@@ -1,5 +1,27 @@
 # Echo OS — Agent Instructions
 
+## Project Documentation
+
+Before making changes, use the project documentation according to its role:
+
+- `docs/concept.md` defines the project's conceptual direction and goals.
+- `docs/design.md` defines interaction and design principles.
+- `docs/architecture.md` describes the current system architecture.
+
+Treat these documents according to their roles rather than as interchangeable
+sources of truth.
+
+Implementation examples in documentation are not necessarily permanent
+requirements.
+
+When documentation and the current code disagree, inspect both and consider
+the type of documentation involved. Do not silently resolve the discrepancy
+by assuming either the documentation or the code is automatically correct.
+
+If the discrepancy affects the requested change, preserve the project's
+conceptual and design direction, make the smallest reasonable implementation
+decision, and report the discrepancy when relevant.
+
 ## Project Overview
 
 Echo OS is an interactive web-based concept operating system created as a
@@ -8,206 +30,85 @@ personal creative project.
 It is not an attempt to implement a real operating system kernel or reproduce
 an existing desktop environment in a browser.
 
-Echo OS is a design experiment built around the following question:
+The project explores operating-system interaction from a work-centered rather
+than strictly application-centered perspective.
 
-> What if we step away from the assumption that a desktop operating system
-> must be application-centric, and instead design the environment around the
-> user's work?
+For the project's goals, conceptual model, design philosophy, and current
+architecture, refer to the project documentation above.
 
-The project explores how an operating environment can reduce the amount of
-attention users spend operating the OS and its applications, allowing them to
-focus more directly on what they actually want to work on.
+Echo OS is an exploratory prototype. Do not assume that the current
+interaction model or implementation is final.
 
-A useful guiding principle is:
+New abstractions should be justified by observed needs in the prototype rather
+than designed speculatively.
 
-> Focus on what the user wants to do with the operating system, rather than
-> on using the operating system itself.
+## Core Agent Principles
 
-This is an exploratory prototype. Do not assume that the current interaction
-model is final. New abstractions should be justified by observed needs in the
-prototype rather than designed speculatively.
+### Work over Implementation Structure
 
-
-## Core Design Direction
-
-Traditional desktop environments often expose applications as the primary
-entry point:
-
-Intent
-→ Application
-→ Window
-→ File or Content
-→ Work
-
-Echo OS is currently exploring a different flow:
-
-Intent
-→ Surface
-→ Item
-→ Application / Capability
-→ Work
-
-This does NOT mean that applications should be removed.
-
-Applications remain useful implementation units and capability providers.
-The experiment is whether they need to remain the primary user-facing
-organizational unit.
-
-When making UX or architecture decisions, preserve this distinction between:
+Preserve the distinction between:
 
 - internal system structure
 - user-facing interaction structure
 
 They do not need to be identical.
 
+Do not expose an internal implementation concept in the UI merely because it
+exists in the architecture.
 
-## Current Conceptual Model
+Applications, registries, components, state containers, and other
+implementation units should not automatically become user-facing
+organizational units.
 
-The project currently uses or explores the following concepts.
+When modifying existing UI, preserve the project's work-centered direction
+described in `docs/concept.md` and `docs/design.md`.
 
-### Surface
+### Surface Boundaries
 
-Surface is a transient invocation and discovery interface.
+Treat a Surface as a meaningful work-context boundary.
 
-It can expose:
+Within the same Surface, existing context may be reused when that preserves
+continuity and matches the intended interaction.
 
-- Items
-- Applications
-- Actions
-- Recent Items
+Across different Surfaces, do not automatically redirect, focus, move, or
+deduplicate work merely because the same Item or equivalent target already
+exists elsewhere.
 
-Surface is NOT an Application Launcher.
+The same Item may exist in more than one Surface.
 
-Do not turn it into an application grid, Start menu, or conventional command
-palette by default.
+Crossing a Surface boundary should generally result from explicit user
+interaction rather than invisible global behavior.
 
-When the query is empty, Surface currently prioritizes recent Items.
+Do not optimize away Surface boundaries merely to enforce uniqueness.
 
-When the user searches, Item, Application, and Action results may be shown
-through the same interface.
+### Work-Target Identity
 
-Avoid duplicate intents. For example, if an Application result already opens
-About, do not also expose an "Open About" Action merely as an alias.
+When UI represents a work target, prefer the identity of that target over the
+identity of the implementation used to render it.
 
+Do not add redundant Application names, headings, or chrome merely because the
+rendering component belongs to an Application internally.
 
-### Item
+Tabs, titles, search results, and other work-facing UI should represent what
+the user is working with when that is the more meaningful identity.
 
-An Item represents something the user can work with or act on.
+This does not prohibit Application identity when the Application itself is the
+user's intended target.
 
-The current prototype primarily maps Items to VFS files and directories, but
-the concept should not be unnecessarily restricted to traditional files.
+### Context over Uniformity
 
-An Item is not conceptually owned by an Application.
+Shared system behavior does not require every interaction context to behave
+identically.
 
-Applications may operate on Items.
+The same Item or action may have different navigation behavior depending on
+where the user invoked it.
 
-Current execution policy is intentionally small:
+Prefer behavior that preserves the user's current context and work continuity
+over artificial architectural uniformity.
 
-- directory → Files
-- `.txt` file → Text Viewer
-- unsupported file → no execution
-
-Do not introduce MIME systems, handler registries, Open With systems, or
-generalized capability frameworks until the prototype actually requires them.
-
-
-### Application
-
-Applications are capability and implementation units.
-
-They do not necessarily need to be directly launchable by the user.
-
-For example, Text Viewer exists as an Application internally but is currently
-hidden from Surface because it is invoked through a text Item.
-
-Do not assume:
-
-Application = launcher entry = Window owner
-
-These may coincide in some cases, but Echo OS deliberately does not treat them
-as universally equivalent.
-
-
-### Window
-
-A Window is part of the workspace/spatial environment.
-
-A Window does not have to belong permanently to an Application.
-
-The current Window model therefore allows `appId` to be absent and supports
-Generic Windows that can later have an Application attached.
-
-Preserve this property unless there is a deliberate design decision to change
-it.
-
-Do not regress toward an architecture where every Window must be created and
-owned by an Application.
-
-
-### Workspace and Tab
-
-Workspace and Tab are conceptual directions, not completed systems.
-
-The rough spatial model under exploration is:
-
-Workspace
-→ Window
-→ Tab
-
-Do not implement a Workspace or Tab architecture merely because these concepts
-are documented.
-
-They should only be introduced when a concrete interaction requires them.
-
-
-## Current Interaction Model
-
-The current prototype supports this important interaction path:
-
-Surface
-→ Item
-→ shared Item execution policy
-→ appropriate Application / capability
-→ Window
-
-Item execution is centralized at the Desktop/system level.
-
-Both Surface and Files use the same Item execution policy for files.
-
-Files must not know that `.txt` means Text Viewer.
-
-Likewise, Surface must not independently duplicate Item execution rules.
-
-Context-specific navigation is allowed.
-
-For example:
-
-- Surface → directory opens that directory in Files.
-- Files → directory double-click navigates within the existing Files Window.
-
-Do not force these interactions to behave identically merely for architectural
-uniformity.
-
-
-## Recent
-
-Recent is currently Item-centric.
-
-The intended prototype rule is:
-
-> Recent = Items that were successfully executed through the shared Item
-> execution path.
-
-Recent is NOT currently:
-
-- recent Applications
-- recent Windows
-- Files navigation history
-- general activity history
-
-Keep Recent small and simple unless later testing shows that this definition
-needs to change.
-
+Do not duplicate system-level policy merely to achieve context-specific
+navigation. Share the policy that is genuinely common and keep navigation
+behavior in the context that owns it.
 
 ## Technology
 
@@ -226,105 +127,144 @@ Use TypeScript strictly.
 
 Avoid `any` unless there is a strong technical reason.
 
+## Architecture Rules
 
-## Architecture
+The current architecture is documented in `docs/architecture.md`.
 
-Keep system-level behavior separate from individual Applications.
+Do not duplicate its implementation description in this file.
 
-Current major implementation areas include:
+When modifying architecture, inspect the current code in addition to the
+architecture document.
 
-- Desktop
-- Universal Surface
-- Window System
-- Application Registry
-- Applications
-- Virtual File System
-- Item execution
-- Taskbar
-- System-level state
+The architecture should support the product concept rather than dictate it.
 
-The architecture should support the concept rather than dictate it.
+Do not preserve an architectural structure solely because it already exists if
+the requested behavior reveals a concrete reason to change it.
 
-Do not expose an internal implementation concept in the UI merely because it
-exists in the architecture.
+At the same time, do not redesign architecture when the existing structure can
+support the requested behavior with a smaller change.
 
+### Responsibility and State Ownership
 
-### Application Registry
-
-Applications are registered through a centralized registry.
-
-An Application may have metadata such as:
-
-- ID
-- Name
-- Icon
-- Component
-- Surface visibility
-
-Registry membership does not imply that an Application must appear as a
-directly launchable Surface result.
-
-
-### Virtual File System
-
-The project must not depend on the user's real file system.
-
-The VFS currently represents files, directories, paths, and content for the
-prototype.
-
-Keep VFS logic independent from the Files UI.
-
-The current VFS state model is intentionally simple and is not yet a fully
-shared persistent filesystem.
-
-Do not redesign VFS state management unless a feature creates a concrete need
-for shared state.
-
-
-## State Management
+Keep behavior in the smallest layer that genuinely owns the responsibility.
 
 Keep state as close as possible to the component or system that owns it.
 
-Promote state only when multiple parts of the system genuinely need shared
+Promote state only when multiple parts of the system genuinely require shared
 ownership.
+
+When shared ownership is required, prefer one coherent source of truth over
+manually synchronized duplicate state.
 
 Do not introduce global state simply for convenience.
 
 Do not add a state-management library unless the existing React model has
 become a concrete limitation.
 
+Do not move behavior to a higher-level system merely because doing so is
+convenient for one call site.
 
-## UI and Design
+### Item Execution
 
-Echo OS should feel coherent as an operating environment, but visual fidelity
-to existing desktop operating systems is not the primary goal.
+Item execution policy should be shared when multiple contexts execute the same
+kind of Item.
 
-Windows, macOS, Linux, browsers, launchers, and other interfaces may be used
-as references.
+Do not independently duplicate knowledge of Item handling across Surface,
+Files, or other interfaces.
 
-Do not copy their interaction models automatically.
+Individual Applications should not need to know unrelated system-level
+execution policy.
 
-For every familiar desktop convention, ask whether it supports the current
-Echo OS concept before reproducing it.
+Keep separate:
 
-Maintain consistent:
+- what an Item represents
+- how the system executes it
+- how a particular context navigates to or represents it
 
-- spacing
-- typography
-- colors
-- border radius
-- shadows
-- icons
-- animation
-- interaction patterns
+Do not introduce generalized handler, MIME, capability, or Open With systems
+until a concrete requirement justifies them.
 
-Use shared CSS variables or design tokens where appropriate.
+### Virtual File System
 
-Avoid unnecessary visual complexity.
+Keep VFS logic independent from the Files UI and other individual consumers.
 
-The interface should emphasize the user's content and work rather than system
-chrome.
+Files, editors, discovery interfaces, and other UI should consume filesystem
+state rather than own independent copies of it when shared state is required.
 
+Changes to shared filesystem state should remain coherent for relevant
+consumers.
+
+Do not couple VFS operations to a specific UI merely to make synchronization
+work.
+
+Do not introduce persistence layers, real filesystem access, synchronization
+frameworks, filesystem databases, or generalized storage abstractions until a
+concrete feature requires them.
+
+## UI Implementation Rules
+
+Follow the interaction and visual principles in `docs/design.md`.
+
+Do not reproduce familiar desktop behavior automatically.
+
+Do not change familiar behavior merely for novelty.
+
+Prefer the user's content and work over unnecessary system chrome.
+
+### Overflow and Resizing
+
+UI should remain usable across Window and Surface resizing.
+
+Do not hide overflow merely to remove a scrollbar.
+
+When unexpected overflow appears, identify whether it comes from actual content
+or from layout behavior such as:
+
+- padding
+- borders
+- intrinsic sizing
+- flex or grid constraints
+- baseline behavior
+- nested scroll owners
+
+Place scrolling responsibility on the element that conceptually owns the
+overflow.
+
+Avoid multiple nested scroll containers for the same content unless the
+interaction genuinely requires them.
+
+Temporary editing UI may use different overflow behavior from normal content
+display when that produces the more appropriate editing interaction.
+
+Inputs and editing controls should remain usable within the current viewport
+while adapting to their content where appropriate.
+
+### Keyboard and Interaction Behavior
+
+Keyboard behavior must be scoped to the context that actually owns it.
+
+Do not treat an active Window or active Tab as equivalent to keyboard focus
+inside an editable element.
+
+Before handling a keyboard action, consider:
+
+- active Window or Surface
+- active Tab or target
+- focused element
+- whether the focused element is editable
+- whether the requested action is currently available
+
+Do not intercept normal text-editing behavior for navigation or system
+shortcuts.
+
+When a shortcut has no valid action in the current context, prefer leaving the
+event unconsumed unless there is a deliberate reason otherwise.
+
+When keyboard, context-menu, toolbar, or other interactions express the same
+user intent, reuse the same underlying action where practical.
+
+Do not create separate implementations of the same operation merely because
+they have different invocation methods.
 
 ## Component Design
 
@@ -339,6 +279,11 @@ Do not create abstractions merely because they may become useful later.
 A small amount of duplication or explicit policy is preferable to a premature
 framework.
 
+When an abstraction is introduced, it should solve a responsibility that has
+already appeared in real code or interaction behavior.
+
+Do not generalize a local solution solely because a future feature might
+possibly need similar behavior.
 
 ## Development Rules
 
@@ -349,7 +294,8 @@ Before modifying existing code:
 3. Identify the smallest layer that owns the requested behavior.
 4. Reuse existing paths when they already express the same behavior.
 5. Make the smallest reasonable change.
-6. Verify regressions.
+6. Preserve relevant existing behavior unless the request intentionally changes
+   it.
 
 Do not rewrite working systems unnecessarily.
 
@@ -357,9 +303,17 @@ Do not introduce speculative architecture.
 
 Do not implement future roadmap features as part of the current task.
 
+Do not silently broaden the task into cleanup, refactoring, modernization, or
+architecture work.
+
 If a limitation is discovered outside the requested scope, report it instead
 of automatically fixing it.
 
+A local problem should receive a local solution unless the existing
+architecture makes that impossible.
+
+Prefer extending an existing behavior path over creating a parallel path for
+the same responsibility.
 
 ## Prototype-First Development
 
@@ -380,14 +334,18 @@ idea
 → generalized framework
 → implementation
 
-Do not attempt to fully formalize concepts such as Item, Application,
-Capability, Workspace, Action, or Tab before the prototype requires it.
+Do not fully formalize a concept merely because it appears likely to become
+important later.
 
-When two real code paths begin duplicating the same responsibility, a small
-shared abstraction may be introduced.
+Do not design systems solely for hypothetical future features.
 
-Avoid designing systems solely for hypothetical future features.
+When real code paths begin duplicating the same responsibility, a small shared
+abstraction may be introduced.
 
+When actual use reveals that an earlier implementation or abstraction is no
+longer appropriate, it may be changed.
+
+Do not preserve an implementation merely because it was previously documented.
 
 ## AI Agent Behavior
 
@@ -409,7 +367,14 @@ Do not turn conceptual possibilities mentioned in documentation into
 implementation requirements.
 
 When requirements are ambiguous, prefer the smallest implementation consistent
-with current behavior and design direction.
+with:
+
+1. the explicit request
+2. the project's conceptual and design direction
+3. current behavior
+4. current architecture
+
+Do not invent additional requirements merely to make a feature more complete.
 
 If a request would require a major architectural change, explain why before
 performing it.
@@ -417,52 +382,68 @@ performing it.
 When you notice a potentially useful future improvement, report it separately
 rather than implementing it without request.
 
+Do not continue into another feature, roadmap phase, refactor, or cleanup task
+unless explicitly requested.
 
-## Current Development Priorities
+## Roadmap and Development Priorities
 
-Development priorities are determined by the current interaction experiment,
-not by a checklist of conventional OS features.
+AGENTS.md does not define the current roadmap.
 
-The current focus is approximately:
+Development priorities change as the prototype is used and evaluated.
 
-1. Universal Surface
-2. Item discovery and execution
-3. Item/Application separation
-4. Recent Items
-5. Evaluate the resulting interaction loop
-6. Refine the model based on actual use
+Follow the human developer's current request and current project planning
+rather than treating any feature list in this file as a permanent priority
+order.
 
-Do not assume that conventional features such as Settings, Terminal, additional
-Applications, Workspace, or Tabs are automatically the next priority.
+Do not infer that a conventional operating-system feature should be implemented
+merely because it is absent.
 
-After completing a phase, stop unless explicitly asked to continue.
+Do not assume that the next logical engineering task is the next desired
+product task.
 
+A future feature mentioned in documentation is not an implementation request.
 
-## Quality and Verification
+After completing the requested task, stop unless explicitly asked to continue.
 
-Before considering a task complete:
+## Validation and Reporting
 
-- Run TypeScript checks.
-- Run the production build.
-- Use `git diff --check`.
-- Test the changed behavior in the actual application when possible.
-- Check the browser console.
-- Test relevant existing behavior for regressions.
+Do not automatically run expensive or broad validation commands unless the
+human developer requests validation or the current task explicitly requires it.
 
-Do not claim that a feature works without verifying it.
+In particular, do not assume that every task requires:
 
-When reporting completion, distinguish between:
+- TypeScript `--noEmit` checks
+- production builds
+- `git diff --check`
+- browser or manual verification
+- broad regression testing
 
+The human developer may perform validation separately.
+
+When validation is requested, use the smallest validation appropriate to the
+change before expanding to broader checks.
+
+Never claim that behavior was verified when it was only inferred from code.
+
+When reporting completion, distinguish when relevant between:
+
+- implemented changes
 - directly verified behavior
 - behavior inferred from code
+- validation not performed
 - known existing issues
 
+Do not spend substantial task time or token budget on validation that was not
+requested.
 
 ## Scope
 
 Echo OS is a concept OS and interactive UX prototype.
 
-Do not attempt to implement:
+Do not expand a normal feature request into implementation of real
+operating-system infrastructure.
+
+Unless the project deliberately changes scope, do not attempt to implement:
 
 - a real kernel
 - real hardware access
@@ -476,7 +457,6 @@ experiment.
 
 Technical realism is useful when it supports the concept, but it is not the
 primary goal.
-
 
 ## Guiding Rule
 
