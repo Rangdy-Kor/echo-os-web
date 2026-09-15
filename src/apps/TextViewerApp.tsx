@@ -4,29 +4,48 @@ import { findEntry, VEntry } from '../vfs/vfs'
 type Props = {
   vfs: VEntry
   initialItemPath?: string[]
+  pathMigration?: { id: number; oldPath: string[]; newPath: string[] } | null
   onSave: (path: string[], content: string) => void
   onDirtyChange?: (dirty: boolean) => void
   onBack?: () => void
   active?: boolean
 }
 
-export default function TextViewerApp({ vfs, initialItemPath = [], onSave, onDirtyChange, onBack, active = true }: Props){
+function pathsMatch(a: string[], b: string[]){
+  return a.length === b.length && a.every((part, index)=>part === b[index])
+}
+
+function migratePath(path: string[], migration: NonNullable<Props['pathMigration']>){
+  return path.length >= migration.oldPath.length && migration.oldPath.every((part, index)=>path[index] === part)
+    ? [...migration.newPath, ...path.slice(migration.oldPath.length)]
+    : path
+}
+
+export default function TextViewerApp({ vfs, initialItemPath = [], pathMigration, onSave, onDirtyChange, onBack, active = true }: Props){
+  const itemPath = initialItemPath.join('/')
   const item = findEntry(initialItemPath, vfs)
   const savedContent = item?.type === 'file' ? item.content ?? '' : ''
   const [draft, setDraft] = useState(savedContent)
   const editorRef = useRef<HTMLTextAreaElement | null>(null)
+  const previousItemPathRef = useRef(initialItemPath)
   const previousSavedContentRef = useRef(savedContent)
 
   useEffect(()=>{
-    setDraft(current=>current === previousSavedContentRef.current ? savedContent : current)
+    const previousPath = previousItemPathRef.current
+    const sameItem = pathsMatch(previousPath, initialItemPath) || !!pathMigration && pathsMatch(migratePath(previousPath, pathMigration), initialItemPath)
+    setDraft(current=>sameItem
+      ? current === previousSavedContentRef.current ? savedContent : current
+      : savedContent
+    )
+    previousItemPathRef.current = initialItemPath
     previousSavedContentRef.current = savedContent
-  },[savedContent])
+  },[itemPath, savedContent, pathMigration?.id])
 
   const dirty = item?.type === 'file' && draft !== savedContent
 
   useEffect(()=>{
     onDirtyChange?.(dirty)
-  },[dirty])
+  },[dirty, itemPath])
 
   useEffect(()=>()=>onDirtyChange?.(false),[])
 
@@ -35,8 +54,10 @@ export default function TextViewerApp({ vfs, initialItemPath = [], onSave, onDir
     function onKeyDown(event: KeyboardEvent){
       const editor = editorRef.current
       const editorFocused = !!editor && document.activeElement === editor && event.target === editor
+      const target = event.target instanceof HTMLElement ? event.target : null
+      const editableTarget = !!target?.closest('input, textarea, select, [contenteditable="true"]')
 
-      if(event.key === 'Backspace' && !editorFocused && onBack){
+      if(event.key === 'Backspace' && !editorFocused && !editableTarget && onBack){
         event.preventDefault()
         onBack()
       } else if((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's' && editorFocused && dirty){

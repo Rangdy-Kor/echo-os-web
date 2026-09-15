@@ -1,7 +1,7 @@
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import type { AppDescriptor } from '../apps/registry'
 import { findApp } from '../apps/registry'
-import type { VEntry } from '../vfs/vfs'
+import { findEntry, getExistingRenameCandidate, getRenameSelectionEnd, type VEntry } from '../vfs/vfs'
 import UniversalSurface, { type SurfaceResult } from './UniversalSurface'
 
 export type TabTarget =
@@ -51,12 +51,49 @@ function tabLabel(tab: SurfaceTab, dirty = false){
 
 export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, maxRecent, active: surfaceActive, onExecute, onOpenItem, onCreateTextFile, onCreateFolder, onRenameItem, onDeleteItem, pathMigration, onSaveItem, onDirectoryChange, onAddTab, onActivateTab, onCloseTab, onBack }: Props){
   const [dirtyTabs, setDirtyTabs] = useState<Record<string, { path: string; dirty: boolean }>>({})
+  const [renamingTab, setRenamingTab] = useState<{ tabId: string; originalName: string; draft: string } | null>(null)
+  const tabRenameInputRef = useRef<HTMLInputElement | null>(null)
+  const tabRenameCancelledRef = useRef(false)
+
+  useEffect(()=>{
+    if(!renamingTab) return
+    const input = tabRenameInputRef.current
+    input?.focus()
+    input?.setSelectionRange(0, getRenameSelectionEnd(renamingTab.originalName, 'file'))
+  },[renamingTab?.tabId])
 
   function setTabDirty(tabId: string, path: string, dirty: boolean){
     setDirtyTabs(current=>current[tabId]?.path === path && current[tabId].dirty === dirty
       ? current
       : { ...current, [tabId]: { path, dirty } }
     )
+  }
+
+  function startTabRename(tab: SurfaceTab, event: React.MouseEvent){
+    if(tab.target.type !== 'item' || tab.target.itemType !== 'file' || tab.target.appId !== 'text-viewer') return
+    event.preventDefault()
+    event.stopPropagation()
+    setRenamingTab({ tabId: tab.id, originalName: tab.target.label, draft: tab.target.label })
+  }
+
+  function finishTabRename(){
+    if(!renamingTab) return
+    if(tabRenameCancelledRef.current){
+      tabRenameCancelledRef.current = false
+      setRenamingTab(null)
+      return
+    }
+
+    const tab = surface.tabs.find(candidate=>candidate.id === renamingTab.tabId)
+    if(tab?.target.type !== 'item' || tab.target.itemType !== 'file'){
+      setRenamingTab(null)
+      return
+    }
+    const parent = findEntry(tab.target.path.slice(0, -1), vfs)
+    const siblingNames = parent?.type === 'dir' ? (parent.children ?? []).map(entry=>entry.name) : []
+    const finalCandidate = getExistingRenameCandidate(renamingTab.draft, siblingNames, tab.target.label)
+    onRenameItem(tab.target.path, finalCandidate)
+    setRenamingTab(null)
   }
 
   return (
@@ -67,9 +104,34 @@ export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, ma
           const path = tab.target.type === 'item' ? tab.target.path.join('/') : null
           const dirty = path !== null && dirtyTabs[tab.id]?.path === path && dirtyTabs[tab.id].dirty
           const label = tabLabel(tab, dirty)
+          const renamable = tab.target.type === 'item' && tab.target.itemType === 'file' && tab.target.appId === 'text-viewer'
           return (
             <div key={tab.id} className={`surface-tab${active ? ' active' : ''}`} role="tab" aria-selected={active} onClick={()=>onActivateTab(tab.id)}>
-              <span className="surface-tab-label">{label}</span>
+              <div className="surface-tab-label-slot" onDoubleClick={renamable ? event=>startTabRename(tab, event) : undefined}>
+                {renamingTab?.tabId === tab.id ? (
+                  <input
+                    ref={tabRenameInputRef}
+                    className="surface-tab-rename"
+                    aria-label={`Rename ${tab.target.type === 'empty' ? 'Tab' : tab.target.label}`}
+                    value={renamingTab.draft}
+                    onMouseDown={event=>event.stopPropagation()}
+                    onClick={event=>event.stopPropagation()}
+                    onDoubleClick={event=>event.stopPropagation()}
+                    onChange={event=>setRenamingTab(current=>current ? { ...current, draft: event.target.value } : current)}
+                    onKeyDown={event=>{
+                      event.stopPropagation()
+                      if(event.key === 'Enter') event.currentTarget.blur()
+                      if(event.key === 'Escape'){
+                        tabRenameCancelledRef.current = true
+                        event.currentTarget.blur()
+                      }
+                    }}
+                    onBlur={finishTabRename}
+                  />
+                ) : (
+                  <span className="surface-tab-label">{label}</span>
+                )}
+              </div>
               <button className="surface-tab-close" aria-label={`Close ${label}`} onClick={event=>{ event.stopPropagation(); onCloseTab(tab.id) }}>×</button>
             </div>
           )
@@ -80,27 +142,42 @@ export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, ma
         {surface.tabs.map(tab=>{
           const active = tab.id === surface.activeTabId
           const target = tab.target
+          const showingFiles = target.type !== 'empty' && target.appId === 'files'
+          const filesTarget = showingFiles
+            ? target
+            : [...tab.history].reverse().find(candidate=>candidate.type !== 'empty' && candidate.appId === 'files')
+          const FilesComp = filesTarget ? findApp('files')?.component : undefined
           let content: React.ReactNode
 
           if(target.type === 'empty'){
             content = <UniversalSurface apps={apps} items={items} recent={recent} maxRecent={maxRecent} active={active} onExecute={(result, mode = 'current')=>onExecute(tab.id, result, mode)} />
+          } else if(showingFiles){
+            content = FilesComp ? null : <p>Target is unavailable.</p>
           } else {
             const app = findApp(target.appId)
             const Comp = app?.component
             if(!Comp){
               content = <p>Target is unavailable.</p>
-            } else if(target.appId === 'files'){
-              const initialPath = target.type === 'item' ? target.path : []
-              content = <Comp vfs={vfs} initialPath={initialPath} active={surfaceActive && active} onOpenItem={(path: string[], item: VEntry)=>onOpenItem(tab.id, path, item)} onCreateTextFile={onCreateTextFile} onCreateFolder={onCreateFolder} onRenameItem={onRenameItem} onDeleteItem={onDeleteItem} pathMigration={pathMigration} onPathChange={(path: string[])=>onDirectoryChange(tab.id, path)} />
             } else if(target.appId === 'text-viewer' && target.type === 'item'){
               const path = target.path.join('/')
-              content = <Comp key={path} vfs={vfs} initialItemPath={target.path} active={surfaceActive && active} onSave={onSaveItem} onBack={tab.history.length > 0 ? ()=>onBack(tab.id) : undefined} onDirtyChange={(dirty: boolean)=>setTabDirty(tab.id, path, dirty)} />
+              content = <Comp vfs={vfs} initialItemPath={target.path} pathMigration={pathMigration} active={surfaceActive && active} onSave={onSaveItem} onBack={tab.history.length > 0 ? ()=>onBack(tab.id) : undefined} onDirtyChange={(dirty: boolean)=>setTabDirty(tab.id, path, dirty)} />
             } else {
               content = <Comp />
             }
           }
 
-          return <div key={tab.id} className="surface-tab-panel" role="tabpanel" hidden={!active}>{content}</div>
+          const filesInitialPath = filesTarget?.type === 'item' ? filesTarget.path : []
+          return (
+            <div key={tab.id} className="surface-tab-panel" role="tabpanel" hidden={!active}>
+              {FilesComp && filesTarget && (
+                <div className="surface-target-panel" hidden={!showingFiles}>
+                  <FilesComp vfs={vfs} initialPath={filesInitialPath} active={surfaceActive && active && showingFiles} onOpenItem={(path: string[], item: VEntry)=>onOpenItem(tab.id, path, item)} onCreateTextFile={onCreateTextFile} onCreateFolder={onCreateFolder} onRenameItem={onRenameItem} onDeleteItem={onDeleteItem} pathMigration={pathMigration} onPathChange={(path: string[])=>{ if(showingFiles) onDirectoryChange(tab.id, path) }} />
+                </div>
+              )}
+              {!showingFiles && <div className="surface-target-panel">{content}</div>}
+              {showingFiles && !FilesComp && <div className="surface-target-panel">{content}</div>}
+            </div>
+          )
         })}
       </div>
     </div>

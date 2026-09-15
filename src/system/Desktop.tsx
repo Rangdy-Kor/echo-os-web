@@ -44,6 +44,68 @@ function migrateTabTarget(target: TabTarget, oldPath: string[], newPath: string[
   return { ...target, path, label: target.path.length === oldPath.length ? newPath[newPath.length - 1] : target.label }
 }
 
+function SurfaceTitle({ name, onRename }: { name: string; onRename: (name: string)=>void }){
+  const [renaming, setRenaming] = useState(false)
+  const [draft, setDraft] = useState(name)
+  const inputRef = useRef<HTMLInputElement | null>(null)
+
+  useEffect(()=>{
+    if(!renaming) return
+    inputRef.current?.focus()
+    inputRef.current?.select()
+  }, [renaming])
+
+  function startRename(event: React.MouseEvent){
+    event.preventDefault()
+    event.stopPropagation()
+    setDraft(name)
+    setRenaming(true)
+  }
+
+  function commitRename(){
+    const nextName = draft.trim()
+    if(nextName && nextName !== name) onRename(nextName)
+    setRenaming(false)
+  }
+
+  if(renaming){
+    return (
+      <input
+        ref={inputRef}
+        className="surface-window-title-input"
+        data-window-drag="false"
+        value={draft}
+        aria-label="Surface name"
+        onChange={event=>setDraft(event.target.value)}
+        onBlur={commitRename}
+        onMouseDown={event=>event.stopPropagation()}
+        onDoubleClick={event=>event.stopPropagation()}
+        onKeyDown={event=>{
+          event.stopPropagation()
+          if(event.key === 'Enter'){
+            event.preventDefault()
+            event.currentTarget.blur()
+          } else if(event.key === 'Escape'){
+            event.preventDefault()
+            setDraft(name)
+            setRenaming(false)
+          }
+        }}
+      />
+    )
+  }
+
+  return (
+    <span
+      className="surface-window-title"
+      data-window-drag="false"
+      onDoubleClick={startRename}
+    >
+      {name}
+    </span>
+  )
+}
+
 export default function Desktop(){
   const wm = useWindowManager()
   const apps = getApps()
@@ -351,6 +413,10 @@ export default function Desktop(){
                 onMinimize={wm.toggleMinimize}
                 onMaximize={wm.toggleMaximize}
                 contentClassName={surface ? 'surface-window-content' : undefined}
+                previewable={!!surface}
+                titlebarTitle={surface ? (
+                  <SurfaceTitle name={w.title} onRename={name=>wm.setTitle(w.id, name)} />
+                ) : undefined}
                 titlebarLeading={surface ? (
                   <button
                     className="button surface-window-back"
@@ -394,7 +460,12 @@ export default function Desktop(){
         <div className="system-bar">
           <div style={{display:'flex',alignItems:'center'}}>
             {/* Taskbar */}
-            <Taskbar apps={apps} wm={{...wm, close: closeWindow}} showApplicationLaunchers={false} />
+            <Taskbar
+              apps={apps}
+              wm={{...wm, close: closeWindow}}
+              showApplicationLaunchers={false}
+              surfaceWindowIds={surfaces.map(surface=>surface.windowId)}
+            />
             <button className="button" onClick={openSurface} title="Open Surface">＋ Surface</button>
           </div>
           <div style={{flex:1}} />

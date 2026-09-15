@@ -1,5 +1,6 @@
 import React, { useRef, useEffect } from 'react'
 import type { WindowState } from './WindowManager'
+import { captureWindowPreview, removeWindowPreview } from './windowPreview'
 
 type Props = {
   state: WindowState
@@ -10,11 +11,13 @@ type Props = {
   onMinimize: (id:string)=>void
   onMaximize: (id:string)=>void
   titlebarLeading?: React.ReactNode
+  titlebarTitle?: React.ReactNode
+  previewable?: boolean
   contentClassName?: string
   children?: React.ReactNode
 }
 
-export default function Window({ state, onClose, onFocus, onMove, onResize, onMinimize, onMaximize, titlebarLeading, contentClassName, children }: Props){
+export default function Window({ state, onClose, onFocus, onMove, onResize, onMinimize, onMaximize, titlebarLeading, titlebarTitle, previewable = false, contentClassName, children }: Props){
   const ref = useRef<HTMLDivElement | null>(null)
   const resizingRef = useRef<{dir:string, startX:number, startY:number, orig: {x:number,y:number,w:number,h:number}} | null>(null)
 
@@ -26,6 +29,7 @@ export default function Window({ state, onClose, onFocus, onMove, onResize, onMi
     let dragging = false
     let startX=0,startY=0,origX=0,origY=0
     function onDown(e:MouseEvent){
+      if((e.target as Element).closest('[data-window-drag="false"]')) return
       dragging = true
       startX = e.clientX; startY = e.clientY
       origX = state.x; origY = state.y
@@ -50,6 +54,17 @@ export default function Window({ state, onClose, onFocus, onMove, onResize, onMi
     title.addEventListener('mousedown', onDown)
     return ()=> title.removeEventListener('mousedown', onDown)
   },[state, onMove])
+
+  useEffect(()=>{
+    if(!previewable || state.minimized) return
+    const frame = requestAnimationFrame(()=>{
+      if(ref.current) void captureWindowPreview(state.id, ref.current)
+    })
+    return ()=>{
+      cancelAnimationFrame(frame)
+      removeWindowPreview(state.id)
+    }
+  }, [previewable, state.id])
 
   useEffect(()=>{
     // cleanup if unmounted while resizing
@@ -168,13 +183,21 @@ export default function Window({ state, onClose, onFocus, onMove, onResize, onMi
 
   const handleStyleBase: React.CSSProperties = { position: 'absolute', background: 'transparent' }
 
+  function minimize(){
+    if(!previewable || !ref.current){
+      onMinimize(state.id)
+      return
+    }
+    void captureWindowPreview(state.id, ref.current).finally(()=>onMinimize(state.id))
+  }
+
   return (
-    <div ref={ref} className="window" style={{...style, zIndex: state.z}} onMouseDown={()=> onFocus(state.id)}>
+    <div ref={ref} className="window" data-window-id={state.id} style={{...style, zIndex: state.z}} onMouseDown={()=> onFocus(state.id)}>
       <div className="titlebar">
         {titlebarLeading}
-        <div style={{flex:1}}>{state.title}</div>
+        <div className="window-title">{titlebarTitle ?? state.title}</div>
         <div style={{display:'flex',gap:8}}>
-          <button className="button" onClick={()=>onMinimize(state.id)}>—</button>
+          <button className="button" onClick={minimize}>—</button>
           <button className="button" onClick={()=>onMaximize(state.id)}>{state.maximized? '🗗':'🗖'}</button>
           <button className="button" onClick={()=>onClose(state.id)}>✕</button>
         </div>

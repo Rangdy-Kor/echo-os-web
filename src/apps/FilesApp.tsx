@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { findEntry, getCollisionSafeName, getNewTextFileRenameCandidate, VEntry } from '../vfs/vfs'
+import { findEntry, getExistingRenameCandidate, getNewTextFileRenameCandidate, getRenameSelectionEnd, VEntry } from '../vfs/vfs'
 
 type PathMigration = { id: number; oldPath: string[]; newPath: string[] }
 
@@ -19,7 +19,7 @@ type Props = {
 }
 
 type ContextMenuState = { x: number; y: number; entryName?: string }
-type RenameState = { originalName: string; draft: string; mode: 'existing' | 'new-text' }
+type RenameState = { originalName: string; draft: string; mode: 'existing' | 'new-text'; itemType: VEntry['type'] }
 
 function migratePath(path: string[], migration: PathMigration){
   return path.length >= migration.oldPath.length && migration.oldPath.every((part, index)=>path[index] === part)
@@ -72,8 +72,9 @@ export default function FilesApp({ vfs, initialPath = [], onOpenItem, onCreateTe
 
   useEffect(()=>{
     if(!renaming) return
-    renameInputRef.current?.focus()
-    renameInputRef.current?.select()
+    const input = renameInputRef.current
+    input?.focus()
+    input?.setSelectionRange(0, getRenameSelectionEnd(renaming.originalName, renaming.itemType))
   },[renaming?.originalName])
 
   useLayoutEffect(()=>{
@@ -165,7 +166,7 @@ export default function FilesApp({ vfs, initialPath = [], onOpenItem, onCreateTe
   function createNewTextFile(){
     const name = defaultTextFileName()
     onCreateTextFile(cwdRef.current, name)
-    startRename(name, 'new-text')
+    startRename(name, 'new-text', 'file')
   }
 
   function createNewFolder(){
@@ -177,13 +178,13 @@ export default function FilesApp({ vfs, initialPath = [], onOpenItem, onCreateTe
       name = `${base} (${index})`
     }
     onCreateFolder(cwdRef.current, name)
-    startRename(name)
+    startRename(name, 'existing', 'dir')
   }
 
-  function startRename(name: string, mode: RenameState['mode'] = 'existing'){
+  function startRename(name: string, mode: RenameState['mode'] = 'existing', itemType = children.find(child=>child.name === name)?.type ?? 'file'){
     setContextMenu(null)
     setSelected(name)
-    setRenaming({ originalName: name, draft: name, mode })
+    setRenaming({ originalName: name, draft: name, mode, itemType })
   }
 
   function deleteSelectedItem(name: string){
@@ -232,7 +233,7 @@ export default function FilesApp({ vfs, initialPath = [], onOpenItem, onCreateTe
     const trimmedValue = rawValue.trim()
     const siblingNames = children.map(entry=>entry.name)
     const finalCandidate = renaming.mode === 'existing'
-      ? getCollisionSafeName(trimmedValue, siblingNames, renaming.originalName)
+      ? getExistingRenameCandidate(trimmedValue, siblingNames, renaming.originalName)
       : getNewTextFileRenameCandidate(trimmedValue, siblingNames, renaming.originalName)
 
     const actualName = onRenameItem([...cwdRef.current, renaming.originalName], finalCandidate)

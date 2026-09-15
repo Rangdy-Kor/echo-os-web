@@ -157,6 +157,16 @@ export function getCollisionSafeName(requestedName: string, siblingNames: string
   return candidate
 }
 
+export function getExistingRenameCandidate(rawName: string, siblingNames: string[], currentName: string){
+  return getCollisionSafeName(rawName.trim(), siblingNames, currentName)
+}
+
+export function getRenameSelectionEnd(name: string, itemType: VEntry['type']){
+  if(itemType === 'dir') return name.length
+  const extensionIndex = name.lastIndexOf('.')
+  return extensionIndex > 0 ? extensionIndex : name.length
+}
+
 export function getNewTextFileRenameCandidate(rawName: string, siblingNames: string[], currentName: string){
   const trimmedName = rawName.trim()
   if(!trimmedName) return ''
