@@ -44,6 +44,7 @@ export default function Taskbar({ apps, wm, showApplicationLaunchers = true, sur
   const menuRef = useRef<HTMLDivElement | null>(null)
   const previewRef = useRef<HTMLDivElement | null>(null)
   const previewWindowIdRef = useRef<string | null>(null)
+  const previewRequestRef = useRef(0)
   const openPreviewTimerRef = useRef<number | null>(null)
   const closePreviewTimerRef = useRef<number | null>(null)
   const [menu, setMenu] = useState<PopupTarget | null>(null)
@@ -66,6 +67,7 @@ export default function Taskbar({ apps, wm, showApplicationLaunchers = true, sur
   }
 
   function closePreview(){
+    previewRequestRef.current += 1
     cancelPreviewOpen()
     cancelPreviewClose()
     previewWindowIdRef.current = null
@@ -76,6 +78,7 @@ export default function Taskbar({ apps, wm, showApplicationLaunchers = true, sur
 
   function schedulePreviewClose(){
     cancelPreviewOpen()
+    previewRequestRef.current += 1
     if(previewWindowIdRef.current === null) return
     cancelPreviewClose()
     closePreviewTimerRef.current = window.setTimeout(closePreview, 120)
@@ -121,7 +124,8 @@ export default function Taskbar({ apps, wm, showApplicationLaunchers = true, sur
   }
 
   function isFocused(win: WindowState){
-    const topZ = windows.length ? Math.max(...windows.map(w=>w.z)) : -Infinity
+    const visibleWindows = windows.filter(candidate=>!candidate.minimized)
+    const topZ = visibleWindows.length ? Math.max(...visibleWindows.map(candidate=>candidate.z)) : -Infinity
     return win.z === topZ
   }
 
@@ -131,32 +135,37 @@ export default function Taskbar({ apps, wm, showApplicationLaunchers = true, sur
     closePreview()
   }
 
-  function openPreview(win: WindowState, anchor: Element){
-    if(menu || !surfaceIds.has(win.id)) return
-    cancelPreviewClose()
-    previewWindowIdRef.current = win.id
-    setPreview({ anchorRect: anchor.getBoundingClientRect(), winId: win.id })
-    setPreviewPos(null)
-    setPreviewSnapshot(getWindowPreview(win.id))
-    if(win.minimized) return
-    const element = findWindowElement(win.id)
-    if(!element) return
-    void captureWindowPreview(win.id, element).then(snapshot=>{
-      if(snapshot && previewWindowIdRef.current === win.id) setPreviewSnapshot(snapshot)
-    })
-  }
-
   function schedulePreviewOpen(win: WindowState, anchor: Element){
     if(menu || !surfaceIds.has(win.id)) return
     cancelPreviewOpen()
     cancelPreviewClose()
-    openPreviewTimerRef.current = window.setTimeout(()=>{
+    const requestId = previewRequestRef.current + 1
+    previewRequestRef.current = requestId
+    const anchorRect = anchor.getBoundingClientRect()
+    const snapshotPromise = win.minimized
+      ? Promise.resolve(getWindowPreview(win.id))
+      : (()=>{
+          const element = findWindowElement(win.id)
+          return element ? captureWindowPreview(win.id, element) : Promise.resolve(null)
+        })()
+    openPreviewTimerRef.current = window.setTimeout(async ()=>{
       openPreviewTimerRef.current = null
-      openPreview(win, anchor)
+      const snapshot = await snapshotPromise
+      if(!snapshot || requestId !== previewRequestRef.current || menu) return
+      previewWindowIdRef.current = win.id
+      setPreview({ anchorRect, winId: win.id })
+      setPreviewPos(null)
+      setPreviewSnapshot(snapshot)
     }, 500)
   }
 
   function openMenu(win: WindowState, anchor: Element){
+    if(menu?.winId === win.id){
+      closePreview()
+      setMenu(null)
+      setMenuPos(null)
+      return
+    }
     closePreview()
     setMenuPos(null)
     setMenu({ anchorRect: anchor.getBoundingClientRect(), winId: win.id })
@@ -176,6 +185,15 @@ export default function Taskbar({ apps, wm, showApplicationLaunchers = true, sur
     const element = surfaceIds.has(win.id) ? findWindowElement(win.id) : null
     if(!element){ wm.toggleMinimize(win.id); return }
     void captureWindowPreview(win.id, element).finally(()=>wm.toggleMinimize(win.id))
+  }
+
+  function clickTaskbarWindow(win: WindowState, focused: boolean, isSurface: boolean){
+    if(isSurface && focused){
+      closePreview()
+      minimizeWindow(win)
+      return
+    }
+    activateWindow(win)
   }
 
   const genericWindows = windows.filter(w=>!w.appId)
@@ -232,7 +250,7 @@ export default function Taskbar({ apps, wm, showApplicationLaunchers = true, sur
           <div key={win.id} className={cls.join(' ')}
             onMouseEnter={event=>isSurface && schedulePreviewOpen(win, event.currentTarget)}
             onMouseLeave={isSurface ? schedulePreviewClose : undefined}
-            onClick={event=>{ event.stopPropagation(); activateWindow(win) }}
+            onClick={event=>{ event.stopPropagation(); clickTaskbarWindow(win, focused, isSurface) }}
             onContextMenu={event=>{ event.preventDefault(); event.stopPropagation(); openMenu(win, event.currentTarget) }}
             title={isSurface ? undefined : win.title}>
             <span className="app-icon" />

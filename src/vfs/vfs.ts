@@ -167,14 +167,6 @@ export function getRenameSelectionEnd(name: string, itemType: VEntry['type']){
   return extensionIndex > 0 ? extensionIndex : name.length
 }
 
-export function getNewTextFileRenameCandidate(rawName: string, siblingNames: string[], currentName: string){
-  const trimmedName = rawName.trim()
-  if(!trimmedName) return ''
-
-  const normalizedName = trimmedName.toLowerCase().endsWith('.txt') ? trimmedName : `${trimmedName}.txt`
-  return getCollisionSafeName(normalizedName, siblingNames, currentName)
-}
-
 export function renameEntry(root: VEntry, pathParts: string[], newName: string): VEntry{
   const name = newName.trim()
   if(pathParts.length === 0 || !name || name.includes('/')) return root

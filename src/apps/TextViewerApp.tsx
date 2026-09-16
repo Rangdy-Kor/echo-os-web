@@ -32,9 +32,10 @@ export default function TextViewerApp({ vfs, initialItemPath = [], pathMigration
 
   useEffect(()=>{
     const previousPath = previousItemPathRef.current
+    const previousSavedContent = previousSavedContentRef.current
     const sameItem = pathsMatch(previousPath, initialItemPath) || !!pathMigration && pathsMatch(migratePath(previousPath, pathMigration), initialItemPath)
     setDraft(current=>sameItem
-      ? current === previousSavedContentRef.current ? savedContent : current
+      ? current === previousSavedContent ? savedContent : current
       : savedContent
     )
     previousItemPathRef.current = initialItemPath
@@ -45,7 +46,7 @@ export default function TextViewerApp({ vfs, initialItemPath = [], pathMigration
 
   useEffect(()=>{
     onDirtyChange?.(dirty)
-  },[dirty, itemPath])
+  },[dirty, itemPath, active])
 
   useEffect(()=>()=>onDirtyChange?.(false),[])
 

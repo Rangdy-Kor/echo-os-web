@@ -13,12 +13,18 @@ export type SurfaceTab = {
   id: string
   target: TabTarget
   history: TabTarget[]
+  future: TabTarget[]
 }
 
 export type SurfaceState = {
   windowId: string
   tabs: SurfaceTab[]
   activeTabId: string
+}
+
+type EditorSession = {
+  id: string
+  path: string[]
 }
 
 type Props = {
@@ -49,11 +55,53 @@ function tabLabel(tab: SurfaceTab, dirty = false){
   return dirty ? `${label}*` : label
 }
 
+function pathsMatch(a: string[], b: string[]){
+  return a.length === b.length && a.every((part, index)=>part === b[index])
+}
+
+function migrateSessionPath(path: string[], migration: NonNullable<Props['pathMigration']>){
+  return path.length >= migration.oldPath.length && migration.oldPath.every((part, index)=>path[index] === part)
+    ? [...migration.newPath, ...path.slice(migration.oldPath.length)]
+    : path
+}
+
 export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, maxRecent, active: surfaceActive, onExecute, onOpenItem, onCreateTextFile, onCreateFolder, onRenameItem, onDeleteItem, pathMigration, onSaveItem, onDirectoryChange, onAddTab, onActivateTab, onCloseTab, onBack }: Props){
   const [dirtyTabs, setDirtyTabs] = useState<Record<string, { path: string; dirty: boolean }>>({})
   const [renamingTab, setRenamingTab] = useState<{ tabId: string; originalName: string; draft: string } | null>(null)
   const tabRenameInputRef = useRef<HTMLInputElement | null>(null)
   const tabRenameCancelledRef = useRef(false)
+  const editorSessionsRef = useRef<Record<string, EditorSession[]>>({})
+  const nextEditorSessionIdRef = useRef(1)
+  const appliedPathMigrationRef = useRef<number | null>(null)
+
+  if(pathMigration && appliedPathMigrationRef.current !== pathMigration.id){
+    for(const tabId of Object.keys(editorSessionsRef.current)){
+      editorSessionsRef.current[tabId] = editorSessionsRef.current[tabId].map(session=>({
+        ...session,
+        path: migrateSessionPath(session.path, pathMigration),
+      }))
+    }
+    appliedPathMigrationRef.current = pathMigration.id
+  }
+
+  for(const tab of surface.tabs){
+    if(tab.target.type !== 'item' || tab.target.appId !== 'text-viewer') continue
+    const targetPath = tab.target.path
+    const sessions = editorSessionsRef.current[tab.id] ?? []
+    if(!sessions.some(session=>pathsMatch(session.path, targetPath))){
+      editorSessionsRef.current[tab.id] = [
+        ...sessions,
+        { id: `editor-session-${nextEditorSessionIdRef.current++}`, path: targetPath },
+      ]
+    }
+  }
+
+  useEffect(()=>{
+    const tabIds = new Set(surface.tabs.map(tab=>tab.id))
+    for(const tabId of Object.keys(editorSessionsRef.current)){
+      if(!tabIds.has(tabId)) delete editorSessionsRef.current[tabId]
+    }
+  },[surface.tabs])
 
   useEffect(()=>{
     if(!renamingTab) return
@@ -145,8 +193,11 @@ export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, ma
           const showingFiles = target.type !== 'empty' && target.appId === 'files'
           const filesTarget = showingFiles
             ? target
-            : [...tab.history].reverse().find(candidate=>candidate.type !== 'empty' && candidate.appId === 'files')
+            : [...tab.history, ...tab.future].reverse().find(candidate=>candidate.type !== 'empty' && candidate.appId === 'files')
           const FilesComp = filesTarget ? findApp('files')?.component : undefined
+          const TextComp = findApp('text-viewer')?.component
+          const editorSessions = editorSessionsRef.current[tab.id] ?? []
+          const showingEditorPath = target.type === 'item' && target.appId === 'text-viewer' ? target.path : null
           let content: React.ReactNode
 
           if(target.type === 'empty'){
@@ -159,8 +210,7 @@ export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, ma
             if(!Comp){
               content = <p>Target is unavailable.</p>
             } else if(target.appId === 'text-viewer' && target.type === 'item'){
-              const path = target.path.join('/')
-              content = <Comp vfs={vfs} initialItemPath={target.path} pathMigration={pathMigration} active={surfaceActive && active} onSave={onSaveItem} onBack={tab.history.length > 0 ? ()=>onBack(tab.id) : undefined} onDirtyChange={(dirty: boolean)=>setTabDirty(tab.id, path, dirty)} />
+              content = TextComp ? null : <p>Target is unavailable.</p>
             } else {
               content = <Comp />
             }
@@ -174,7 +224,27 @@ export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, ma
                   <FilesComp vfs={vfs} initialPath={filesInitialPath} active={surfaceActive && active && showingFiles} onOpenItem={(path: string[], item: VEntry)=>onOpenItem(tab.id, path, item)} onCreateTextFile={onCreateTextFile} onCreateFolder={onCreateFolder} onRenameItem={onRenameItem} onDeleteItem={onDeleteItem} pathMigration={pathMigration} onPathChange={(path: string[])=>{ if(showingFiles) onDirectoryChange(tab.id, path) }} />
                 </div>
               )}
-              {!showingFiles && <div className="surface-target-panel">{content}</div>}
+              {TextComp && editorSessions.map(session=>{
+                const showingEditor = !!showingEditorPath && pathsMatch(session.path, showingEditorPath)
+                const path = session.path.join('/')
+                return (
+                  <div key={session.id} className="surface-target-panel" hidden={!showingEditor}>
+                    <TextComp
+                      vfs={vfs}
+                      initialItemPath={session.path}
+                      pathMigration={pathMigration}
+                      active={surfaceActive && active && showingEditor}
+                      onSave={onSaveItem}
+                      onBack={showingEditor && tab.history.length > 0 ? ()=>onBack(tab.id) : undefined}
+                      onDirtyChange={(dirty: boolean)=>{
+                        if(showingEditor) setTabDirty(tab.id, path, dirty)
+                      }}
+                    />
+                  </div>
+                )
+              })}
+              {!showingFiles && !showingEditorPath && <div className="surface-target-panel">{content}</div>}
+              {showingEditorPath && !TextComp && <div className="surface-target-panel">{content}</div>}
               {showingFiles && !FilesComp && <div className="surface-target-panel">{content}</div>}
             </div>
           )

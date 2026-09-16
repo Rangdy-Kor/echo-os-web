@@ -191,12 +191,18 @@ export default function Window({ state, onClose, onFocus, onMove, onResize, onMi
     void captureWindowPreview(state.id, ref.current).finally(()=>onMinimize(state.id))
   }
 
+  function onTitlebarDoubleClick(event: React.MouseEvent<HTMLDivElement>){
+    if((event.target as Element).closest('[data-window-drag="false"]')) return
+    event.preventDefault()
+    onMaximize(state.id)
+  }
+
   return (
     <div ref={ref} className="window" data-window-id={state.id} style={{...style, zIndex: state.z}} onMouseDown={()=> onFocus(state.id)}>
-      <div className="titlebar">
+      <div className="titlebar" onDoubleClick={onTitlebarDoubleClick}>
         {titlebarLeading}
-        <div className="window-title">{titlebarTitle ?? state.title}</div>
-        <div style={{display:'flex',gap:8}}>
+        <div className={`window-title${titlebarTitle ? ' custom-window-title' : ''}`}>{titlebarTitle ?? state.title}</div>
+        <div className="window-controls" data-window-drag="false">
           <button className="button" onClick={minimize}>—</button>
           <button className="button" onClick={()=>onMaximize(state.id)}>{state.maximized? '🗗':'🗖'}</button>
           <button className="button" onClick={()=>onClose(state.id)}>✕</button>

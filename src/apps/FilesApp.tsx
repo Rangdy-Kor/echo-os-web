@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
-import { findEntry, getExistingRenameCandidate, getNewTextFileRenameCandidate, getRenameSelectionEnd, VEntry } from '../vfs/vfs'
+import { findEntry, getExistingRenameCandidate, getRenameSelectionEnd, VEntry } from '../vfs/vfs'
 
 type PathMigration = { id: number; oldPath: string[]; newPath: string[] }
 
@@ -18,8 +18,9 @@ type Props = {
   onPathChange?: (path: string[]) => void
 }
 
-type ContextMenuState = { x: number; y: number; entryName?: string }
-type RenameState = { originalName: string; draft: string; mode: 'existing' | 'new-text'; itemType: VEntry['type'] }
+type ContextMenuState = { clientX: number; clientY: number; entryName?: string }
+type ContextMenuPosition = { x: number; y: number; submenuLeft: boolean }
+type RenameState = { originalName: string; draft: string; itemType: VEntry['type'] }
 
 function migratePath(path: string[], migration: PathMigration){
   return path.length >= migration.oldPath.length && migration.oldPath.every((part, index)=>path[index] === part)
@@ -27,21 +28,38 @@ function migratePath(path: string[], migration: PathMigration){
     : path
 }
 
+function pathsMatch(a: string[], b: string[]){
+  return a.length === b.length && a.every((part, index)=>part === b[index])
+}
+
 export default function FilesApp({ vfs, initialPath = [], onOpenItem, onCreateTextFile, onCreateFolder, onRenameItem, onDeleteItem, pathMigration, active = true, windowId, onTitleChange, onPathChange }: Props){
   const [cwd, setCwd] = useState<string[]>(() => initialPath.slice())
   const cwdRef = useRef<string[]>(cwd)
   const rootRef = useRef<HTMLDivElement | null>(null)
+  const contextMenuRef = useRef<HTMLDivElement | null>(null)
   const renameInputRef = useRef<HTMLInputElement | null>(null)
   const renameMeasureRef = useRef<HTMLSpanElement | null>(null)
   const renameCancelledRef = useRef(false)
+  const wasActiveRef = useRef(active)
   const [backStack, setBackStack] = useState<string[][]>([])
   const [forwardStack, setForwardStack] = useState<string[][]>([])
   const [selected, setSelected] = useState<string | null>(null)
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
+  const [contextMenuPosition, setContextMenuPosition] = useState<ContextMenuPosition | null>(null)
   const [renaming, setRenaming] = useState<RenameState | null>(null)
   const [renameInputWidth, setRenameInputWidth] = useState(96)
 
   useEffect(() => { cwdRef.current = cwd }, [cwd])
+  useEffect(()=>{
+    if(active && !wasActiveRef.current && !pathsMatch(cwdRef.current, initialPath)){
+      setCwd(initialPath.slice())
+      setBackStack([])
+      setForwardStack([])
+      setSelected(null)
+      setRenaming(null)
+    }
+    wasActiveRef.current = active
+  },[active, initialPath.join('/')])
   useEffect(() => {
     if(windowId && onTitleChange) onTitleChange(windowId, cwd.length === 0 ? 'Files' : cwd[cwd.length - 1])
     onPathChange?.(cwd)
@@ -68,6 +86,23 @@ export default function FilesApp({ vfs, initialPath = [], onOpenItem, onCreateTe
       document.removeEventListener('pointerdown', closeMenu)
       document.removeEventListener('keydown', onKeyDown)
     }
+  },[contextMenu])
+
+  useLayoutEffect(()=>{
+    const root = rootRef.current
+    const menu = contextMenuRef.current
+    if(!contextMenu || !root || !menu) return
+
+    const rootRect = root.getBoundingClientRect()
+    const menuRect = menu.getBoundingClientRect()
+    const preferredX = contextMenu.clientX - rootRect.left
+    const preferredY = contextMenu.clientY - rootRect.top
+    const x = Math.max(0, Math.min(preferredX, root.clientWidth - menuRect.width))
+    const y = Math.max(0, Math.min(preferredY, root.clientHeight - menuRect.height))
+    const spaceRight = root.clientWidth - (x + menuRect.width)
+    const spaceLeft = x
+
+    setContextMenuPosition({ x, y, submenuLeft: spaceRight < menuRect.width && spaceLeft > spaceRight })
   },[contextMenu])
 
   useEffect(()=>{
@@ -166,7 +201,7 @@ export default function FilesApp({ vfs, initialPath = [], onOpenItem, onCreateTe
   function createNewTextFile(){
     const name = defaultTextFileName()
     onCreateTextFile(cwdRef.current, name)
-    startRename(name, 'new-text', 'file')
+    startRename(name, 'file')
   }
 
   function createNewFolder(){
@@ -178,13 +213,13 @@ export default function FilesApp({ vfs, initialPath = [], onOpenItem, onCreateTe
       name = `${base} (${index})`
     }
     onCreateFolder(cwdRef.current, name)
-    startRename(name, 'existing', 'dir')
+    startRename(name, 'dir')
   }
 
-  function startRename(name: string, mode: RenameState['mode'] = 'existing', itemType = children.find(child=>child.name === name)?.type ?? 'file'){
+  function startRename(name: string, itemType = children.find(child=>child.name === name)?.type ?? 'file'){
     setContextMenu(null)
     setSelected(name)
-    setRenaming({ originalName: name, draft: name, mode, itemType })
+    setRenaming({ originalName: name, draft: name, itemType })
   }
 
   function deleteSelectedItem(name: string){
@@ -232,9 +267,7 @@ export default function FilesApp({ vfs, initialPath = [], onOpenItem, onCreateTe
     const rawValue = renaming.draft
     const trimmedValue = rawValue.trim()
     const siblingNames = children.map(entry=>entry.name)
-    const finalCandidate = renaming.mode === 'existing'
-      ? getExistingRenameCandidate(trimmedValue, siblingNames, renaming.originalName)
-      : getNewTextFileRenameCandidate(trimmedValue, siblingNames, renaming.originalName)
+    const finalCandidate = getExistingRenameCandidate(trimmedValue, siblingNames, renaming.originalName)
 
     const actualName = onRenameItem([...cwdRef.current, renaming.originalName], finalCandidate)
     setSelected(actualName ?? renaming.originalName)
@@ -249,13 +282,10 @@ export default function FilesApp({ vfs, initialPath = [], onOpenItem, onCreateTe
     event.preventDefault()
     const entryName = target.closest('li')?.getAttribute('data-name') ?? undefined
     if(entryName) setSelected(entryName)
-    const rect = root.getBoundingClientRect()
-    const width = 150
-    const height = 72
-    const requiredWidth = entryName ? width : width * 2
+    setContextMenuPosition(null)
     setContextMenu({
-      x: Math.max(0, Math.min(event.clientX - rect.left, rect.width - requiredWidth)),
-      y: Math.max(0, Math.min(event.clientY - rect.top, rect.height - height)),
+      clientX: event.clientX,
+      clientY: event.clientY,
       entryName,
     })
   }
@@ -327,7 +357,16 @@ export default function FilesApp({ vfs, initialPath = [], onOpenItem, onCreateTe
       </ul>
 
       {contextMenu && (
-        <div className="files-context-menu" style={{left:contextMenu.x,top:contextMenu.y}} onPointerDown={event=>event.stopPropagation()}>
+        <div
+          ref={contextMenuRef}
+          className={`files-context-menu${contextMenuPosition?.submenuLeft ? ' submenu-left' : ''}`}
+          style={{
+            left: contextMenuPosition?.x ?? 0,
+            top: contextMenuPosition?.y ?? 0,
+            visibility: contextMenuPosition ? 'visible' : 'hidden',
+          }}
+          onPointerDown={event=>event.stopPropagation()}
+        >
           {contextMenu.entryName ? (
             <>
               <button className="button" onClick={()=>startRename(contextMenu.entryName!)}>Rename</button>

@@ -14,14 +14,17 @@ body{margin:0;background:linear-gradient(180deg,var(--bg),#071019);color:var(--t
 /* basic layout */
 .app-root{height:100%;display:flex;flex-direction:column}
 .desktop{flex:1;position:relative;overflow:hidden}
-.system-bar{position:fixed;left:0;right:0;bottom:0;height:48px;background:rgba(15,20,32,0.85);display:flex;align-items:center;padding:0 12px;gap:12px;box-shadow:var(--shadow)}
+.system-bar{position:fixed;z-index:2;left:0;right:0;bottom:0;height:48px;background:rgba(15,20,32,0.85);display:flex;align-items:center;padding:0 12px;gap:12px;box-shadow:var(--shadow)}
 .launcher{display:flex;gap:8px}
-.window-layer{position:absolute;inset:0;pointer-events:none}
+.window-layer{position:absolute;z-index:1;inset:0;pointer-events:none}
 .window{position:absolute;min-width:300px;min-height:120px;background:var(--panel);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;color:var(--text);pointer-events:auto}
 .window .titlebar{height:36px;display:flex;align-items:center;gap:8px;padding:0 8px;background:linear-gradient(0deg, rgba(255,255,255,0.02), transparent)}
 .window-title{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.surface-window-title{display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;cursor:text;user-select:none}
-.surface-window-title-input{box-sizing:border-box;width:min(240px, 100%);height:26px;padding:2px 6px;border:1px solid var(--accent);border-radius:4px;background:rgba(0,0,0,0.18);color:inherit;font:inherit;outline:none;user-select:text}
+.window-title.custom-window-title{display:flex;align-items:center;min-width:56px;text-overflow:clip}
+.window-title.custom-window-title::after{content:"";flex:0 0 56px;min-width:56px}
+.surface-window-title{display:block;flex:0 1 auto;min-width:0;max-width:calc(100% - 56px);overflow:hidden;text-overflow:ellipsis;vertical-align:middle;cursor:text;user-select:none}
+.surface-window-title-input{box-sizing:border-box;flex:1 1 0;min-width:0;height:26px;padding:2px 6px;border:1px solid var(--accent);border-radius:4px;background:rgba(0,0,0,0.18);color:inherit;font:inherit;outline:none;user-select:text}
+.window-controls{display:flex;flex:0 0 auto;gap:8px}
 .window .content{box-sizing:border-box;height:calc(100% - 36px);min-height:0;padding:12px;overflow:auto}
 .window .content.surface-window-content{overflow:hidden}
 .button{background:transparent;border:none;color:var(--text);cursor:pointer}
@@ -57,6 +60,7 @@ body{margin:0;background:linear-gradient(180deg,var(--bg),#071019);color:var(--t
 .files-context-submenu-trigger{position:relative}
 .files-context-submenu-label{display:flex;align-items:center;justify-content:space-between}
 .files-context-submenu{display:none;position:absolute;left:calc(100% - 2px);top:-4px;box-sizing:border-box;width:150px;padding:4px;background:var(--panel);border:1px solid rgba(255,255,255,0.1);border-radius:6px;box-shadow:var(--shadow)}
+.files-context-menu.submenu-left .files-context-submenu{left:auto;right:calc(100% - 2px)}
 .files-context-submenu-trigger:hover .files-context-submenu,
 .files-context-submenu-trigger:focus-within .files-context-submenu{display:block}
 /* taskbar item states */
@@ -90,9 +94,10 @@ body{margin:0;background:linear-gradient(180deg,var(--bg),#071019);color:var(--t
 .universal-surface-section-label{padding-bottom:4px;text-transform:uppercase;letter-spacing:0.08em;opacity:0.7}
 .surface-workspace{height:100%;display:flex;flex-direction:column;min-height:0}
 .surface-tabs{display:flex;align-items:center;gap:4px;padding:6px;border-bottom:1px solid rgba(255,255,255,0.08);overflow-x:auto}
-.surface-window-back{flex:0 0 auto;width:28px;height:28px;border-radius:6px}
-.surface-window-back:hover:not(:disabled){background:rgba(95,234,212,0.07)}
-.surface-window-back:disabled{opacity:0.35;cursor:default}
+.surface-window-navigation{display:flex;align-items:center;gap:2px;flex:0 0 auto}
+.surface-window-navigation-button{flex:0 0 auto;width:28px;height:28px;border-radius:6px}
+.surface-window-navigation-button:hover:not(:disabled){background:rgba(95,234,212,0.07)}
+.surface-window-navigation-button:disabled{opacity:0.35;cursor:default}
 .surface-tab{display:flex;align-items:center;gap:8px;min-width:110px;max-width:190px;padding:6px 8px;border-radius:6px;color:var(--muted);cursor:pointer;background:transparent;user-select:none}
 .surface-tab.active{color:var(--text);background:rgba(95,234,212,0.07)}
 .surface-tab-label-slot{display:flex;flex:1;min-width:0}

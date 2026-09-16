@@ -21,7 +21,7 @@ export type WindowState = {
 export type WindowManagerAPI = {
   windows: WindowState[]
   open: (app: AppDescriptor, opts?: { singleInstance?: boolean })=> string
-  openGeneric: (title?: string)=> string
+  openGeneric: (title?: string, options?: { minH?: number })=> string
   attachApplication: (windowId: string, appId: string, title?: string, initialPath?: string[], initialItemPath?: string[])=>void
   close: (id:string)=>void
   focus: (id:string)=>void
@@ -63,7 +63,7 @@ export default function useWindowManager(): WindowManagerAPI{
     return id
   },[windows])
 
-  const openGeneric = useCallback((title = 'Workspace')=>{
+  const openGeneric = useCallback((title = 'Workspace', options?: { minH?: number })=>{
     const id = `win-${nextWindowId++}`
     setWindows(ws=>[...ws, {
       id,
@@ -74,7 +74,7 @@ export default function useWindowManager(): WindowManagerAPI{
       h:360,
       z: (ws.length? Math.max(...ws.map(w=>w.z))+1:1),
       minW:300,
-      minH:120,
+      minH: options?.minH ?? 120,
     }])
     return id
   },[])

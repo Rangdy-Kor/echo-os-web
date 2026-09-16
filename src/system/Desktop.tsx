@@ -14,7 +14,7 @@ const MAX_RECENT_TARGETS = 5
 let nextTabId = 1
 
 function createEmptyTab(): SurfaceTab{
-  return { id: `tab-${nextTabId++}`, target: { type: 'empty' }, history: [] }
+  return { id: `tab-${nextTabId++}`, target: { type: 'empty' }, history: [], future: [] }
 }
 
 function targetsMatch(a: TabTarget, b: TabTarget){
@@ -115,7 +115,7 @@ export default function Desktop(){
   const [pathMigration, setPathMigration] = useState<{ id: number; oldPath: string[]; newPath: string[] } | null>(null)
 
   function openSurface(){
-    const windowId = wm.openGeneric('Surface')
+    const windowId = wm.openGeneric('Surface', { minH: 160 })
     const tab = createEmptyTab()
     setSurfaces(current=>[...current, { windowId, tabs: [tab], activeTabId: tab.id }])
   }
@@ -205,7 +205,9 @@ export default function Desktop(){
   }
 
   function resolveItemTarget(path: string[], item: Pick<VEntry, 'name' | 'type'>): TabTarget | null{
-    if(item.type === 'dir') return { type: 'item', label: item.name, path, itemType: item.type, appId: 'files' }
+    if(item.type === 'dir') return path.length === 0
+      ? { type: 'application', label: 'Home', appId: 'files' }
+      : { type: 'item', label: item.name, path, itemType: item.type, appId: 'files' }
     if(item.name.toLowerCase().endsWith('.txt')) return { type: 'item', label: item.name, path, itemType: item.type, appId: 'text-viewer' }
     return null
   }
@@ -213,7 +215,7 @@ export default function Desktop(){
   function replaceTabTarget(windowId: string, tabId: string, target: TabTarget){
     setSurfaces(current=>current.map(surface=>surface.windowId === windowId
       ? { ...surface, tabs: surface.tabs.map(tab=>tab.id === tabId && !targetsMatch(tab.target, target)
-        ? { ...tab, target, history: [...tab.history, tab.target] }
+        ? { ...tab, target, history: [...tab.history, tab.target], future: [] }
         : tab
       ) }
       : surface
@@ -228,7 +230,7 @@ export default function Desktop(){
   }
 
   function addTargetTab(windowId: string, target: TabTarget, activate = false){
-    const tab: SurfaceTab = { id: `tab-${nextTabId++}`, target, history: [] }
+    const tab: SurfaceTab = { id: `tab-${nextTabId++}`, target, history: [], future: [] }
     setSurfaces(current=>current.map(surface=>surface.windowId === windowId
       ? { ...surface, tabs: [...surface.tabs, tab], activeTabId: activate ? tab.id : surface.activeTabId }
       : surface
@@ -244,12 +246,7 @@ export default function Desktop(){
           addTargetTab(windowId, target)
         } else {
           const surface = surfaces.find(candidate=>candidate.windowId === windowId)
-          const existingTab = surface?.tabs.find(tab=>
-            (tab.target.type === 'item' &&
-              tab.target.path.length === path.length &&
-              tab.target.path.every((part, index)=>part === path[index])) ||
-            (path.length === 0 && tab.target.type === 'application' && tab.target.appId === 'files')
-          )
+          const existingTab = surface?.tabs.find(tab=>targetsMatch(tab.target, target))
           if(existingTab) activateTab(windowId, existingTab.id)
           else replaceTabTarget(windowId, tabId, target)
         }
@@ -315,6 +312,7 @@ export default function Desktop(){
         ...tab,
         target: migrateTabTarget(tab.target, path, newPath),
         history: tab.history.map(target=>migrateTabTarget(target, path, newPath)),
+        future: tab.future.map(target=>migrateTabTarget(target, path, newPath)),
       })),
     })))
     setRecentTargets(current=>current.map(target=>{
@@ -353,6 +351,22 @@ export default function Desktop(){
           ...tab,
           target: tab.history[tab.history.length - 1],
           history: tab.history.slice(0, -1),
+          future: [...tab.future, tab.target],
+        }
+      }) }
+    }))
+  }
+
+  function goForwardInTab(windowId: string, tabId: string){
+    setSurfaces(current=>current.map(surface=>{
+      if(surface.windowId !== windowId) return surface
+      return { ...surface, tabs: surface.tabs.map(tab=>{
+        if(tab.id !== tabId || tab.future.length === 0) return tab
+        return {
+          ...tab,
+          target: tab.future[tab.future.length - 1],
+          history: [...tab.history, tab.target],
+          future: tab.future.slice(0, -1),
         }
       }) }
     }))
@@ -418,14 +432,22 @@ export default function Desktop(){
                   <SurfaceTitle name={w.title} onRename={name=>wm.setTitle(w.id, name)} />
                 ) : undefined}
                 titlebarLeading={surface ? (
-                  <button
-                    className="button surface-window-back"
-                    aria-label="Back in Tab"
-                    title="Back in this Tab"
-                    disabled={!activeSurfaceTab?.history.length}
-                    onMouseDown={event=>event.stopPropagation()}
-                    onClick={()=>goBackInTab(w.id, surface.activeTabId)}
-                  >🡄</button>
+                  <div className="surface-window-navigation" data-window-drag="false">
+                    <button
+                      className="button surface-window-navigation-button"
+                      aria-label="Back in Tab"
+                      title="Back in this Tab"
+                      disabled={!activeSurfaceTab?.history.length}
+                      onClick={()=>goBackInTab(w.id, surface.activeTabId)}
+                    >🡄</button>
+                    <button
+                      className="button surface-window-navigation-button"
+                      aria-label="Forward in Tab"
+                      title="Forward in this Tab"
+                      disabled={!activeSurfaceTab?.future.length}
+                      onClick={()=>goForwardInTab(w.id, surface.activeTabId)}
+                    >🡆</button>
+                  </div>
                 ) : undefined}
               >
                 {surface
