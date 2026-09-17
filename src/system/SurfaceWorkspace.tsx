@@ -47,6 +47,7 @@ type Props = {
   onAddTab: () => void
   onActivateTab: (tabId: string) => void
   onCloseTab: (tabId: string) => void
+  onReorderTab: (tabId: string, insertionIndex: number) => void
   onBack: (tabId: string) => void
 }
 
@@ -65,9 +66,14 @@ function migrateSessionPath(path: string[], migration: NonNullable<Props['pathMi
     : path
 }
 
-export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, maxRecent, active: surfaceActive, onExecute, onOpenItem, onCreateTextFile, onCreateFolder, onRenameItem, onDeleteItem, pathMigration, onSaveItem, onDirectoryChange, onAddTab, onActivateTab, onCloseTab, onBack }: Props){
+export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, maxRecent, active: surfaceActive, onExecute, onOpenItem, onCreateTextFile, onCreateFolder, onRenameItem, onDeleteItem, pathMigration, onSaveItem, onDirectoryChange, onAddTab, onActivateTab, onCloseTab, onReorderTab, onBack }: Props){
   const [dirtyTabs, setDirtyTabs] = useState<Record<string, { path: string; dirty: boolean }>>({})
   const [renamingTab, setRenamingTab] = useState<{ tabId: string; originalName: string; draft: string } | null>(null)
+  const [tabDrag, setTabDrag] = useState<{ tabId: string; insertionIndex: number } | null>(null)
+  const tabStripRef = useRef<HTMLDivElement | null>(null)
+  const tabElementsRef = useRef(new Map<string, HTMLDivElement>())
+  const dragCleanupRef = useRef<(()=>void) | null>(null)
+  const suppressClickTabRef = useRef<string | null>(null)
   const tabRenameInputRef = useRef<HTMLInputElement | null>(null)
   const tabRenameCancelledRef = useRef(false)
   const editorSessionsRef = useRef<Record<string, EditorSession[]>>({})
@@ -102,6 +108,15 @@ export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, ma
       if(!tabIds.has(tabId)) delete editorSessionsRef.current[tabId]
     }
   },[surface.tabs])
+
+  useEffect(()=>()=>dragCleanupRef.current?.(),[])
+
+  useEffect(()=>{
+    if(tabDrag && !surface.tabs.some(tab=>tab.id === tabDrag.tabId)){
+      dragCleanupRef.current?.()
+      setTabDrag(null)
+    }
+  },[surface.tabs, tabDrag?.tabId])
 
   useEffect(()=>{
     if(!renamingTab) return
@@ -144,17 +159,159 @@ export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, ma
     setRenamingTab(null)
   }
 
+  function startTabDrag(tabId: string, event: React.PointerEvent<HTMLDivElement>){
+    if(event.button !== 0 || renamingTab?.tabId === tabId) return
+    if((event.target as Element).closest('button, input')) return
+    suppressClickTabRef.current = null
+
+    const pointerId = event.pointerId
+    const startX = event.clientX
+    const startY = event.clientY
+    let dragging = false
+    let insertionIndex: number | null = null
+    let ghost: HTMLElement | null = null
+    let grabOffsetX = 0
+    let grabOffsetY = 0
+
+    function moveGhost(clientX: number, clientY: number){
+      if(!ghost) return
+      ghost.style.transform = `translate3d(${clientX - grabOffsetX}px, ${clientY - grabOffsetY}px, 0)`
+    }
+
+    function createGhost(clientX: number, clientY: number){
+      const source = tabElementsRef.current.get(tabId)
+      if(!source) return
+      const rect = source.getBoundingClientRect()
+      grabOffsetX = startX - rect.left
+      grabOffsetY = startY - rect.top
+      ghost = source.cloneNode(true) as HTMLElement
+      ghost.classList.remove('dragging', 'drop-before', 'drop-after')
+      ghost.classList.add('surface-tab-drag-ghost')
+      ghost.setAttribute('aria-hidden', 'true')
+      ghost.style.width = `${rect.width}px`
+      ghost.style.height = `${rect.height}px`
+      ghost.querySelectorAll<HTMLElement>('button, input').forEach(element=>element.tabIndex = -1)
+      document.body.appendChild(ghost)
+      moveGhost(clientX, clientY)
+    }
+
+    function cleanup(){
+      document.removeEventListener('pointermove', onPointerMove)
+      document.removeEventListener('pointerup', onPointerUp)
+      document.removeEventListener('pointercancel', onPointerCancel)
+      document.body.style.userSelect = ''
+      ghost?.remove()
+      ghost = null
+      dragCleanupRef.current = null
+    }
+
+    function finish(commit: boolean){
+      cleanup()
+      setTabDrag(null)
+      if(!dragging) return
+      suppressClickTabRef.current = tabId
+      if(commit && insertionIndex !== null) onReorderTab(tabId, insertionIndex)
+    }
+
+    function onPointerMove(moveEvent: PointerEvent){
+      if(moveEvent.pointerId !== pointerId) return
+      if(!dragging){
+        const distance = Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY)
+        if(distance < 5) return
+        dragging = true
+        document.body.style.userSelect = 'none'
+        createGhost(moveEvent.clientX, moveEvent.clientY)
+      }
+
+      moveGhost(moveEvent.clientX, moveEvent.clientY)
+
+      const strip = tabStripRef.current
+      if(!strip) return
+      const stripRect = strip.getBoundingClientRect()
+      const insideStrip = moveEvent.clientX >= stripRect.left && moveEvent.clientX <= stripRect.right
+        && moveEvent.clientY >= stripRect.top && moveEvent.clientY <= stripRect.bottom
+      if(!insideStrip){
+        insertionIndex = null
+        setTabDrag({ tabId, insertionIndex: -1 })
+        return
+      }
+
+      const otherTabs = surface.tabs.filter(tab=>tab.id !== tabId)
+      insertionIndex = otherTabs.reduce((index, tab)=>{
+        const rect = tabElementsRef.current.get(tab.id)?.getBoundingClientRect()
+        return rect && moveEvent.clientX > rect.left + rect.width / 2 ? index + 1 : index
+      }, 0)
+      setTabDrag({ tabId, insertionIndex })
+    }
+
+    function onPointerUp(upEvent: PointerEvent){
+      if(upEvent.pointerId === pointerId) finish(true)
+    }
+
+    function onPointerCancel(cancelEvent: PointerEvent){
+      if(cancelEvent.pointerId === pointerId) finish(false)
+    }
+
+    dragCleanupRef.current?.()
+    dragCleanupRef.current = cleanup
+    document.addEventListener('pointermove', onPointerMove)
+    document.addEventListener('pointerup', onPointerUp)
+    document.addEventListener('pointercancel', onPointerCancel)
+  }
+
+  function activateTab(tabId: string){
+    if(suppressClickTabRef.current === tabId){
+      suppressClickTabRef.current = null
+      return
+    }
+    onActivateTab(tabId)
+  }
+
+  function closeTabWithMiddleClick(tabId: string, event: React.MouseEvent<HTMLDivElement>){
+    if(event.button !== 1 || renamingTab?.tabId === tabId) return
+    if((event.target as Element).closest('button, input')) return
+    event.preventDefault()
+    event.stopPropagation()
+    onCloseTab(tabId)
+  }
+
+  const draggedTabIndex = tabDrag ? surface.tabs.findIndex(tab=>tab.id === tabDrag.tabId) : -1
+  const dropBoundaryIndex = tabDrag && tabDrag.insertionIndex >= 0 && draggedTabIndex >= 0
+    ? tabDrag.insertionIndex <= draggedTabIndex ? tabDrag.insertionIndex : tabDrag.insertionIndex + 1
+    : -1
+  const dropBeforeTabId = dropBoundaryIndex >= 0 && dropBoundaryIndex < surface.tabs.length
+    ? surface.tabs[dropBoundaryIndex].id
+    : null
+  const dropAfterTabId = dropBoundaryIndex === surface.tabs.length && surface.tabs.length > 0
+    ? surface.tabs[surface.tabs.length - 1].id
+    : null
+
   return (
     <div className="surface-workspace">
-      <div className="surface-tabs" role="tablist" aria-label="Surface tabs">
+      <div ref={tabStripRef} className="surface-tabs" role="tablist" aria-label="Surface tabs">
         {surface.tabs.map(tab=>{
           const active = tab.id === surface.activeTabId
           const path = tab.target.type === 'item' ? tab.target.path.join('/') : null
           const dirty = path !== null && dirtyTabs[tab.id]?.path === path && dirtyTabs[tab.id].dirty
           const label = tabLabel(tab, dirty)
           const renamable = tab.target.type === 'item' && tab.target.itemType === 'file' && tab.target.appId === 'text-viewer'
+          const tabClasses = ['surface-tab']
+          if(active) tabClasses.push('active')
+          if(tabDrag?.tabId === tab.id) tabClasses.push('dragging')
+          if(dropBeforeTabId === tab.id) tabClasses.push('drop-before')
+          if(dropAfterTabId === tab.id) tabClasses.push('drop-after')
           return (
-            <div key={tab.id} className={`surface-tab${active ? ' active' : ''}`} role="tab" aria-selected={active} onClick={()=>onActivateTab(tab.id)}>
+            <div
+              key={tab.id}
+              ref={element=>{ if(element) tabElementsRef.current.set(tab.id, element); else tabElementsRef.current.delete(tab.id) }}
+              className={tabClasses.join(' ')}
+              role="tab"
+              aria-selected={active}
+              onPointerDown={event=>startTabDrag(tab.id, event)}
+              onMouseDown={event=>{ if(event.button === 1) event.preventDefault() }}
+              onAuxClick={event=>closeTabWithMiddleClick(tab.id, event)}
+              onClick={()=>activateTab(tab.id)}
+            >
               <div className="surface-tab-label-slot" onDoubleClick={renamable ? event=>startTabRename(tab, event) : undefined}>
                 {renamingTab?.tabId === tab.id ? (
                   <input
@@ -163,6 +320,8 @@ export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, ma
                     aria-label={`Rename ${tab.target.type === 'empty' ? 'Tab' : tab.target.label}`}
                     value={renamingTab.draft}
                     onMouseDown={event=>event.stopPropagation()}
+                    onPointerDown={event=>event.stopPropagation()}
+                    onAuxClick={event=>event.stopPropagation()}
                     onClick={event=>event.stopPropagation()}
                     onDoubleClick={event=>event.stopPropagation()}
                     onChange={event=>setRenamingTab(current=>current ? { ...current, draft: event.target.value } : current)}
@@ -180,7 +339,7 @@ export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, ma
                   <span className="surface-tab-label">{label}</span>
                 )}
               </div>
-              <button className="surface-tab-close" aria-label={`Close ${label}`} onClick={event=>{ event.stopPropagation(); onCloseTab(tab.id) }}>×</button>
+              <button className="surface-tab-close" aria-label={`Close ${label}`} onPointerDown={event=>event.stopPropagation()} onAuxClick={event=>event.stopPropagation()} onClick={event=>{ event.stopPropagation(); onCloseTab(tab.id) }}>×</button>
             </div>
           )
         })}

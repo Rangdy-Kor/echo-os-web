@@ -342,6 +342,19 @@ export default function Desktop(){
     setSurfaces(current=>current.map(surface=>surface.windowId === windowId ? { ...surface, activeTabId: tabId } : surface))
   }
 
+  function reorderTab(windowId: string, tabId: string, insertionIndex: number){
+    setSurfaces(current=>current.map(surface=>{
+      if(surface.windowId !== windowId) return surface
+      const currentIndex = surface.tabs.findIndex(tab=>tab.id === tabId)
+      if(currentIndex === -1) return surface
+      const tabs = surface.tabs.slice()
+      const [tab] = tabs.splice(currentIndex, 1)
+      const nextIndex = Math.max(0, Math.min(insertionIndex, tabs.length))
+      tabs.splice(nextIndex, 0, tab)
+      return nextIndex === currentIndex ? surface : { ...surface, tabs }
+    }))
+  }
+
   function goBackInTab(windowId: string, tabId: string){
     setSurfaces(current=>current.map(surface=>{
       if(surface.windowId !== windowId) return surface
@@ -471,6 +484,7 @@ export default function Desktop(){
                       onAddTab={()=>addTab(w.id)}
                       onActivateTab={tabId=>activateTab(w.id, tabId)}
                       onCloseTab={tabId=>closeTab(w.id, tabId)}
+                      onReorderTab={(tabId, insertionIndex)=>reorderTab(w.id, tabId, insertionIndex)}
                       onBack={tabId=>goBackInTab(w.id, tabId)}
                     />
                   : Comp ? <Comp {...appProps} /> : <div className="generic-workspace"><p>What do you want to do?</p></div>}

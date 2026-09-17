@@ -98,8 +98,13 @@ body{margin:0;background:linear-gradient(180deg,var(--bg),#071019);color:var(--t
 .surface-window-navigation-button{flex:0 0 auto;width:28px;height:28px;border-radius:6px}
 .surface-window-navigation-button:hover:not(:disabled){background:rgba(95,234,212,0.07)}
 .surface-window-navigation-button:disabled{opacity:0.35;cursor:default}
-.surface-tab{display:flex;align-items:center;gap:8px;min-width:110px;max-width:190px;padding:6px 8px;border-radius:6px;color:var(--muted);cursor:pointer;background:transparent;user-select:none}
+.surface-tab{position:relative;display:flex;align-items:center;gap:8px;min-width:110px;max-width:190px;padding:6px 8px;border-radius:6px;color:var(--muted);cursor:pointer;background:transparent;user-select:none}
 .surface-tab.active{color:var(--text);background:rgba(95,234,212,0.07)}
+.surface-tab.dragging{opacity:0.55}
+.surface-tab-drag-ghost{position:fixed;z-index:1;left:0;top:0;box-sizing:border-box;min-width:0;max-width:none;margin:0;pointer-events:none;opacity:0.78;background:var(--panel);box-shadow:0 8px 18px rgba(0,0,0,0.35);cursor:grabbing}
+.surface-tab.drop-before::before,.surface-tab.drop-after::after{content:"";position:absolute;top:4px;bottom:4px;width:2px;border-radius:2px;background:var(--accent);box-shadow:0 0 5px rgba(95,234,212,0.5)}
+.surface-tab.drop-before::before{left:-3px}
+.surface-tab.drop-after::after{right:-3px}
 .surface-tab-label-slot{display:flex;flex:1;min-width:0}
 .surface-tab-label{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;user-select:none}
 .surface-tab-rename{box-sizing:border-box;flex:1;min-width:0;width:100%;padding:2px 4px;border:1px solid rgba(95,234,212,0.5);border-radius:4px;outline:0;background:rgba(0,0,0,0.24);color:var(--text);font:inherit;user-select:text}
@@ -110,6 +115,7 @@ body{margin:0;background:linear-gradient(180deg,var(--bg),#071019);color:var(--t
 .surface-tab-panel[hidden]{display:none}
 .surface-target-panel{height:100%}
 .surface-target-panel[hidden]{display:none}
+.about-app{display:flow-root}
 .surface-workspace .universal-surface{width:100%;min-height:100%;border:0;border-radius:0;box-shadow:none}
 .text-viewer{height:100%;position:relative}
 .text-editor-save{position:absolute;right:10px;bottom:10px;padding:6px 10px;border-radius:6px;background:var(--panel);box-shadow:0 1px 6px rgba(0,0,0,0.35)}
