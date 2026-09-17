@@ -20,6 +20,7 @@ export type SurfaceState = {
   windowId: string
   tabs: SurfaceTab[]
   activeTabId: string
+  selectedTabIds: string[]
 }
 
 type EditorSession = {
@@ -46,6 +47,7 @@ type Props = {
   onDirectoryChange: (tabId: string, path: string[]) => void
   onAddTab: () => void
   onActivateTab: (tabId: string) => void
+  onToggleTabSelection: (tabId: string) => void
   onCloseTab: (tabId: string) => void
   onReorderTab: (tabId: string, insertionIndex: number) => void
   onBack: (tabId: string) => void
@@ -66,7 +68,7 @@ function migrateSessionPath(path: string[], migration: NonNullable<Props['pathMi
     : path
 }
 
-export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, maxRecent, active: surfaceActive, onExecute, onOpenItem, onCreateTextFile, onCreateFolder, onRenameItem, onDeleteItem, pathMigration, onSaveItem, onDirectoryChange, onAddTab, onActivateTab, onCloseTab, onReorderTab, onBack }: Props){
+export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, maxRecent, active: surfaceActive, onExecute, onOpenItem, onCreateTextFile, onCreateFolder, onRenameItem, onDeleteItem, pathMigration, onSaveItem, onDirectoryChange, onAddTab, onActivateTab, onToggleTabSelection, onCloseTab, onReorderTab, onBack }: Props){
   const [dirtyTabs, setDirtyTabs] = useState<Record<string, { path: string; dirty: boolean }>>({})
   const [renamingTab, setRenamingTab] = useState<{ tabId: string; originalName: string; draft: string } | null>(null)
   const [tabDrag, setTabDrag] = useState<{ tabId: string; insertionIndex: number } | null>(null)
@@ -259,9 +261,13 @@ export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, ma
     document.addEventListener('pointercancel', onPointerCancel)
   }
 
-  function activateTab(tabId: string){
+  function activateTab(tabId: string, event: React.MouseEvent<HTMLDivElement>){
     if(suppressClickTabRef.current === tabId){
       suppressClickTabRef.current = null
+      return
+    }
+    if(event.ctrlKey){
+      onToggleTabSelection(tabId)
       return
     }
     onActivateTab(tabId)
@@ -291,12 +297,14 @@ export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, ma
       <div ref={tabStripRef} className="surface-tabs" role="tablist" aria-label="Surface tabs">
         {surface.tabs.map(tab=>{
           const active = tab.id === surface.activeTabId
+          const selected = (surface.selectedTabIds ?? [surface.activeTabId]).includes(tab.id)
           const path = tab.target.type === 'item' ? tab.target.path.join('/') : null
           const dirty = path !== null && dirtyTabs[tab.id]?.path === path && dirtyTabs[tab.id].dirty
           const label = tabLabel(tab, dirty)
           const renamable = tab.target.type === 'item' && tab.target.itemType === 'file' && tab.target.appId === 'text-viewer'
           const tabClasses = ['surface-tab']
           if(active) tabClasses.push('active')
+          if(selected) tabClasses.push('selected')
           if(tabDrag?.tabId === tab.id) tabClasses.push('dragging')
           if(dropBeforeTabId === tab.id) tabClasses.push('drop-before')
           if(dropAfterTabId === tab.id) tabClasses.push('drop-after')
@@ -310,7 +318,7 @@ export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, ma
               onPointerDown={event=>startTabDrag(tab.id, event)}
               onMouseDown={event=>{ if(event.button === 1) event.preventDefault() }}
               onAuxClick={event=>closeTabWithMiddleClick(tab.id, event)}
-              onClick={()=>activateTab(tab.id)}
+              onClick={event=>activateTab(tab.id, event)}
             >
               <div className="surface-tab-label-slot" onDoubleClick={renamable ? event=>startTabRename(tab, event) : undefined}>
                 {renamingTab?.tabId === tab.id ? (

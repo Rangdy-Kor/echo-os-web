@@ -117,7 +117,7 @@ export default function Desktop(){
   function openSurface(){
     const windowId = wm.openGeneric('Surface', { minH: 160 })
     const tab = createEmptyTab()
-    setSurfaces(current=>[...current, { windowId, tabs: [tab], activeTabId: tab.id }])
+    setSurfaces(current=>[...current, { windowId, tabs: [tab], activeTabId: tab.id, selectedTabIds: [tab.id] }])
   }
 
   const wallpaperRef = useRef<HTMLDivElement | null>(null)
@@ -232,7 +232,12 @@ export default function Desktop(){
   function addTargetTab(windowId: string, target: TabTarget, activate = false){
     const tab: SurfaceTab = { id: `tab-${nextTabId++}`, target, history: [], future: [] }
     setSurfaces(current=>current.map(surface=>surface.windowId === windowId
-      ? { ...surface, tabs: [...surface.tabs, tab], activeTabId: activate ? tab.id : surface.activeTabId }
+      ? {
+          ...surface,
+          tabs: [...surface.tabs, tab],
+          activeTabId: activate ? tab.id : surface.activeTabId,
+          selectedTabIds: activate ? [tab.id] : (surface.selectedTabIds ?? [surface.activeTabId]),
+        }
       : surface
     ))
   }
@@ -333,13 +338,27 @@ export default function Desktop(){
   function addTab(windowId: string){
     const tab = createEmptyTab()
     setSurfaces(current=>current.map(surface=>surface.windowId === windowId
-      ? { ...surface, tabs: [...surface.tabs, tab], activeTabId: tab.id }
+      ? { ...surface, tabs: [...surface.tabs, tab], activeTabId: tab.id, selectedTabIds: [tab.id] }
       : surface
     ))
   }
 
   function activateTab(windowId: string, tabId: string){
-    setSurfaces(current=>current.map(surface=>surface.windowId === windowId ? { ...surface, activeTabId: tabId } : surface))
+    setSurfaces(current=>current.map(surface=>surface.windowId === windowId
+      ? { ...surface, activeTabId: tabId, selectedTabIds: [tabId] }
+      : surface
+    ))
+  }
+
+  function toggleTabSelection(windowId: string, tabId: string){
+    setSurfaces(current=>current.map(surface=>{
+      if(surface.windowId !== windowId || tabId === surface.activeTabId) return surface
+      const currentSelection = surface.selectedTabIds ?? [surface.activeTabId]
+      const selectedTabIds = currentSelection.includes(tabId)
+        ? currentSelection.filter(id=>id !== tabId)
+        : [...currentSelection, tabId]
+      return { ...surface, selectedTabIds }
+    }))
   }
 
   function reorderTab(windowId: string, tabId: string, insertionIndex: number){
@@ -392,11 +411,27 @@ export default function Desktop(){
       const remaining = surface.tabs.filter(tab=>tab.id !== tabId)
       if(remaining.length === 0){
         const emptyTab = createEmptyTab()
-        return { ...surface, tabs: [emptyTab], activeTabId: emptyTab.id }
+        return { ...surface, tabs: [emptyTab], activeTabId: emptyTab.id, selectedTabIds: [emptyTab.id] }
       }
-      if(surface.activeTabId !== tabId) return { ...surface, tabs: remaining }
+      const remainingSelected = (surface.selectedTabIds ?? [surface.activeTabId]).filter(id=>id !== tabId)
+      if(surface.activeTabId !== tabId){
+        return {
+          ...surface,
+          tabs: remaining,
+          selectedTabIds: remainingSelected.includes(surface.activeTabId)
+            ? remainingSelected
+            : [...remainingSelected, surface.activeTabId],
+        }
+      }
       const nextActive = remaining[Math.min(closingIndex, remaining.length - 1)]
-      return { ...surface, tabs: remaining, activeTabId: nextActive.id }
+      return {
+        ...surface,
+        tabs: remaining,
+        activeTabId: nextActive.id,
+        selectedTabIds: remainingSelected.includes(nextActive.id)
+          ? remainingSelected
+          : [...remainingSelected, nextActive.id],
+      }
     }))
   }
 
@@ -483,6 +518,7 @@ export default function Desktop(){
                       onDirectoryChange={(tabId, path)=>updateDirectoryTarget(w.id, tabId, path)}
                       onAddTab={()=>addTab(w.id)}
                       onActivateTab={tabId=>activateTab(w.id, tabId)}
+                      onToggleTabSelection={tabId=>toggleTabSelection(w.id, tabId)}
                       onCloseTab={tabId=>closeTab(w.id, tabId)}
                       onReorderTab={(tabId, insertionIndex)=>reorderTab(w.id, tabId, insertionIndex)}
                       onBack={tabId=>goBackInTab(w.id, tabId)}
