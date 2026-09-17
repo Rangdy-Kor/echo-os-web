@@ -101,6 +101,7 @@ export default function UniversalSurface({ apps, items, recent = [], maxRecent =
 
   return (
       <div className="universal-surface" role="search" aria-label="Universal Surface">
+        <div className="universal-surface-identity">Echo</div>
         <input
           ref={inputRef}
           className="universal-surface-input"

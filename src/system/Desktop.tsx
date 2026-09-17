@@ -109,6 +109,7 @@ function SurfaceTitle({ name, onRename }: { name: string; onRename: (name: strin
 export default function Desktop(){
   const wm = useWindowManager()
   const apps = getApps()
+  const initialSurfaceOpenedRef = useRef(false)
   const [surfaces, setSurfaces] = useState<SurfaceState[]>([])
   const [recentTargets, setRecentTargets] = useState<RecentTarget[]>([])
   const [vfs, setVfs] = useState(getInitialVfs)
@@ -116,9 +117,16 @@ export default function Desktop(){
 
   function openSurface(){
     const windowId = wm.openGeneric('Surface', { minH: 160 })
+    wm.setSize(windowId, 520, 400)
     const tab = createEmptyTab()
     setSurfaces(current=>[...current, { windowId, tabs: [tab], activeTabId: tab.id, selectedTabIds: [tab.id] }])
   }
+
+  useEffect(()=>{
+    if(initialSurfaceOpenedRef.current) return
+    initialSurfaceOpenedRef.current = true
+    openSurface()
+  },[])
 
   const wallpaperRef = useRef<HTMLDivElement | null>(null)
 
