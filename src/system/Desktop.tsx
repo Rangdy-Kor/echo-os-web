@@ -116,8 +116,16 @@ export default function Desktop(){
   const [pathMigration, setPathMigration] = useState<{ id: number; oldPath: string[]; newPath: string[] } | null>(null)
 
   function openSurface(){
+    const width = 520
+    const height = 400
+    const taskbarHeight = 48
     const windowId = wm.openGeneric('Surface', { minH: 160 })
-    wm.setSize(windowId, 520, 400)
+    wm.setSize(windowId, width, height)
+    wm.setPos(
+      windowId,
+      Math.max(0, Math.round((window.innerWidth - width) / 2)),
+      Math.max(0, Math.round((window.innerHeight - taskbarHeight - height) / 2)),
+    )
     const tab = createEmptyTab()
     setSurfaces(current=>[...current, { windowId, tabs: [tab], activeTabId: tab.id, selectedTabIds: [tab.id] }])
   }
