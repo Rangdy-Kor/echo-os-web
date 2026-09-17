@@ -70,8 +70,6 @@ Echo OS는 현재 기능을 **구현 → 직접 사용 → 문제 발견 → 필
 - [ ] **Phase 9 — Surface 경계 상호작용**: Surface 간 Tab Drag & Drop과 tear-off처럼, 사용자가 명시적으로 Surface 경계를 넘는 상호작용을 실험합니다.
 - [ ] **Phase 10 — 작업 Context 지속성**: Surface rename, Surface/Tab 상태 persistence, 필요 시 Recent persistence를 추가합니다.
 
-AI, Split View, 별도 Workspace 계층, 범용 Capability/Handler framework, 실제 파일 시스템/OPFS 전환 등은 3차 로드맵 이후로 미뤄두고 있습니다.
-
 ## 최종 목표
 
 Echo OS의 목적은 기존 OS보다 절대적으로 우월한 방식을 증명하는 것이 아닙니다. 다음과 같은 질문을 **구동되는 프로토타입을 통해 직접 검증하는 것**이 목적입니다.
