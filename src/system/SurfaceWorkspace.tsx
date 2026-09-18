@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import type { AppDescriptor } from '../apps/registry'
+import type { FilesSessionState } from '../apps/FilesApp'
 import { findApp } from '../apps/registry'
 import { findEntry, getExistingRenameCandidate, getRenameSelectionEnd, type VEntry } from '../vfs/vfs'
 import UniversalSurface, { type SurfaceResult } from './UniversalSurface'
@@ -21,12 +22,22 @@ export type SurfaceState = {
   tabs: SurfaceTab[]
   activeTabId: string
   selectedTabIds: string[]
+  selectionAnchorTabId: string | null
 }
 
 type EditorSession = {
   id: string
   path: string[]
 }
+
+export type SurfaceTabRuntime = {
+  editorSessions: EditorSession[]
+  editorDrafts: Record<string, string>
+  nextEditorSessionId: number
+  filesSession?: FilesSessionState
+}
+
+type ExternalDropTarget = { windowId: string; insertionIndex: number }
 
 type Props = {
   surface: SurfaceState
@@ -46,10 +57,15 @@ type Props = {
   onSaveItem: (path: string[], content: string) => void
   onDirectoryChange: (tabId: string, path: string[]) => void
   onAddTab: () => void
-  onActivateTab: (tabId: string) => void
-  onToggleTabSelection: (tabId: string) => void
+  onSelectTab: (tabId: string, mode: 'normal' | 'toggle' | 'range') => void
   onCloseTab: (tabId: string) => void
-  onReorderTab: (tabId: string, insertionIndex: number) => void
+  onReorderTabs: (tabIds: string[], insertionIndex: number) => void
+  onTransferTabs: (tabIds: string[], grabbedTabId: string, targetWindowId: string, insertionIndex: number) => void
+  onFindExternalDropTarget: (clientX: number, clientY: number) => ExternalDropTarget | null
+  onDragEnd: () => void
+  registerTabStrip: (element: HTMLDivElement | null) => void
+  externalDropInsertionIndex: number | null
+  getTabRuntime: (tabId: string) => SurfaceTabRuntime
   onBack: (tabId: string) => void
 }
 
@@ -68,23 +84,27 @@ function migrateSessionPath(path: string[], migration: NonNullable<Props['pathMi
     : path
 }
 
-export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, maxRecent, active: surfaceActive, onExecute, onOpenItem, onCreateTextFile, onCreateFolder, onRenameItem, onDeleteItem, pathMigration, onSaveItem, onDirectoryChange, onAddTab, onActivateTab, onToggleTabSelection, onCloseTab, onReorderTab, onBack }: Props){
+export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, maxRecent, active: surfaceActive, onExecute, onOpenItem, onCreateTextFile, onCreateFolder, onRenameItem, onDeleteItem, pathMigration, onSaveItem, onDirectoryChange, onAddTab, onSelectTab, onCloseTab, onReorderTabs, onTransferTabs, onFindExternalDropTarget, onDragEnd, registerTabStrip, externalDropInsertionIndex, getTabRuntime, onBack }: Props){
   const [dirtyTabs, setDirtyTabs] = useState<Record<string, { path: string; dirty: boolean }>>({})
   const [renamingTab, setRenamingTab] = useState<{ tabId: string; originalName: string; draft: string } | null>(null)
-  const [tabDrag, setTabDrag] = useState<{ tabId: string; insertionIndex: number } | null>(null)
+  const [tabDrag, setTabDrag] = useState<{ tabIds: string[]; insertionIndex: number } | null>(null)
   const tabStripRef = useRef<HTMLDivElement | null>(null)
   const tabElementsRef = useRef(new Map<string, HTMLDivElement>())
   const dragCleanupRef = useRef<(()=>void) | null>(null)
   const suppressClickTabRef = useRef<string | null>(null)
   const tabRenameInputRef = useRef<HTMLInputElement | null>(null)
   const tabRenameCancelledRef = useRef(false)
-  const editorSessionsRef = useRef<Record<string, EditorSession[]>>({})
-  const nextEditorSessionIdRef = useRef(1)
   const appliedPathMigrationRef = useRef<number | null>(null)
 
   if(pathMigration && appliedPathMigrationRef.current !== pathMigration.id){
-    for(const tabId of Object.keys(editorSessionsRef.current)){
-      editorSessionsRef.current[tabId] = editorSessionsRef.current[tabId].map(session=>({
+    for(const tab of surface.tabs){
+      const runtime = getTabRuntime(tab.id)
+      const migratedDrafts: Record<string, string> = {}
+      for(const [path, draft] of Object.entries(runtime.editorDrafts)){
+        migratedDrafts[migrateSessionPath(path.split('/').filter(Boolean), pathMigration).join('/')] = draft
+      }
+      runtime.editorDrafts = migratedDrafts
+      runtime.editorSessions = runtime.editorSessions.map(session=>({
         ...session,
         path: migrateSessionPath(session.path, pathMigration),
       }))
@@ -95,30 +115,24 @@ export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, ma
   for(const tab of surface.tabs){
     if(tab.target.type !== 'item' || tab.target.appId !== 'text-viewer') continue
     const targetPath = tab.target.path
-    const sessions = editorSessionsRef.current[tab.id] ?? []
+    const runtime = getTabRuntime(tab.id)
+    const sessions = runtime.editorSessions
     if(!sessions.some(session=>pathsMatch(session.path, targetPath))){
-      editorSessionsRef.current[tab.id] = [
+      runtime.editorSessions = [
         ...sessions,
-        { id: `editor-session-${nextEditorSessionIdRef.current++}`, path: targetPath },
+        { id: `${tab.id}-editor-session-${runtime.nextEditorSessionId++}`, path: targetPath },
       ]
     }
   }
 
-  useEffect(()=>{
-    const tabIds = new Set(surface.tabs.map(tab=>tab.id))
-    for(const tabId of Object.keys(editorSessionsRef.current)){
-      if(!tabIds.has(tabId)) delete editorSessionsRef.current[tabId]
-    }
-  },[surface.tabs])
-
   useEffect(()=>()=>dragCleanupRef.current?.(),[])
 
   useEffect(()=>{
-    if(tabDrag && !surface.tabs.some(tab=>tab.id === tabDrag.tabId)){
+    if(tabDrag && tabDrag.tabIds.some(tabId=>!surface.tabs.some(tab=>tab.id === tabId))){
       dragCleanupRef.current?.()
       setTabDrag(null)
     }
-  },[surface.tabs, tabDrag?.tabId])
+  },[surface.tabs, tabDrag?.tabIds])
 
   useEffect(()=>{
     if(!renamingTab) return
@@ -169,8 +183,13 @@ export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, ma
     const pointerId = event.pointerId
     const startX = event.clientX
     const startY = event.clientY
+    const selectedIds = new Set(surface.selectedTabIds)
+    const draggedTabIds = selectedIds.has(tabId)
+      ? surface.tabs.filter(tab=>selectedIds.has(tab.id)).map(tab=>tab.id)
+      : [tabId]
     let dragging = false
     let insertionIndex: number | null = null
+    let externalTarget: ExternalDropTarget | null = null
     let ghost: HTMLElement | null = null
     let grabOffsetX = 0
     let grabOffsetY = 0
@@ -184,15 +203,22 @@ export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, ma
       const source = tabElementsRef.current.get(tabId)
       if(!source) return
       const rect = source.getBoundingClientRect()
-      grabOffsetX = startX - rect.left
+      const ghostTabs = draggedTabIds.map(id=>tabElementsRef.current.get(id)).filter((tab): tab is HTMLDivElement=>Boolean(tab))
+      const draggedIndex = draggedTabIds.indexOf(tabId)
+      grabOffsetX = ghostTabs.slice(0, draggedIndex).reduce((width, tab)=>width + tab.getBoundingClientRect().width + 4, 0) + startX - rect.left
       grabOffsetY = startY - rect.top
-      ghost = source.cloneNode(true) as HTMLElement
-      ghost.classList.remove('dragging', 'drop-before', 'drop-after')
+      ghost = document.createElement('div')
       ghost.classList.add('surface-tab-drag-ghost')
       ghost.setAttribute('aria-hidden', 'true')
-      ghost.style.width = `${rect.width}px`
       ghost.style.height = `${rect.height}px`
-      ghost.querySelectorAll<HTMLElement>('button, input').forEach(element=>element.tabIndex = -1)
+      for(const tab of ghostTabs){
+        const clone = tab.cloneNode(true) as HTMLElement
+        clone.classList.remove('dragging', 'drop-before', 'drop-after')
+        clone.style.width = `${tab.getBoundingClientRect().width}px`
+        clone.style.height = `${rect.height}px`
+        clone.querySelectorAll<HTMLElement>('button, input').forEach(element=>element.tabIndex = -1)
+        ghost.appendChild(clone)
+      }
       document.body.appendChild(ghost)
       moveGhost(clientX, clientY)
     }
@@ -205,6 +231,7 @@ export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, ma
       ghost?.remove()
       ghost = null
       dragCleanupRef.current = null
+      onDragEnd()
     }
 
     function finish(commit: boolean){
@@ -212,7 +239,9 @@ export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, ma
       setTabDrag(null)
       if(!dragging) return
       suppressClickTabRef.current = tabId
-      if(commit && insertionIndex !== null) onReorderTab(tabId, insertionIndex)
+      if(!commit) return
+      if(externalTarget) onTransferTabs(draggedTabIds, tabId, externalTarget.windowId, externalTarget.insertionIndex)
+      else if(insertionIndex !== null) onReorderTabs(draggedTabIds, insertionIndex)
     }
 
     function onPointerMove(moveEvent: PointerEvent){
@@ -234,16 +263,20 @@ export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, ma
         && moveEvent.clientY >= stripRect.top && moveEvent.clientY <= stripRect.bottom
       if(!insideStrip){
         insertionIndex = null
-        setTabDrag({ tabId, insertionIndex: -1 })
+        externalTarget = onFindExternalDropTarget(moveEvent.clientX, moveEvent.clientY)
+        setTabDrag({ tabIds: draggedTabIds, insertionIndex: -1 })
         return
       }
 
-      const otherTabs = surface.tabs.filter(tab=>tab.id !== tabId)
+      externalTarget = null
+      onFindExternalDropTarget(-1, -1)
+      const draggedIds = new Set(draggedTabIds)
+      const otherTabs = surface.tabs.filter(tab=>!draggedIds.has(tab.id))
       insertionIndex = otherTabs.reduce((index, tab)=>{
         const rect = tabElementsRef.current.get(tab.id)?.getBoundingClientRect()
         return rect && moveEvent.clientX > rect.left + rect.width / 2 ? index + 1 : index
       }, 0)
-      setTabDrag({ tabId, insertionIndex })
+      setTabDrag({ tabIds: draggedTabIds, insertionIndex })
     }
 
     function onPointerUp(upEvent: PointerEvent){
@@ -266,11 +299,7 @@ export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, ma
       suppressClickTabRef.current = null
       return
     }
-    if(event.ctrlKey){
-      onToggleTabSelection(tabId)
-      return
-    }
-    onActivateTab(tabId)
+    onSelectTab(tabId, event.shiftKey ? 'range' : event.ctrlKey ? 'toggle' : 'normal')
   }
 
   function closeTabWithMiddleClick(tabId: string, event: React.MouseEvent<HTMLDivElement>){
@@ -281,23 +310,23 @@ export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, ma
     onCloseTab(tabId)
   }
 
-  const draggedTabIndex = tabDrag ? surface.tabs.findIndex(tab=>tab.id === tabDrag.tabId) : -1
-  const dropBoundaryIndex = tabDrag && tabDrag.insertionIndex >= 0 && draggedTabIndex >= 0
-    ? tabDrag.insertionIndex <= draggedTabIndex ? tabDrag.insertionIndex : tabDrag.insertionIndex + 1
-    : -1
-  const dropBeforeTabId = dropBoundaryIndex >= 0 && dropBoundaryIndex < surface.tabs.length
-    ? surface.tabs[dropBoundaryIndex].id
+  const draggedIds = new Set(tabDrag?.tabIds ?? [])
+  const remainingTabs = surface.tabs.filter(tab=>!draggedIds.has(tab.id))
+  const shownInsertionIndex = externalDropInsertionIndex ?? tabDrag?.insertionIndex ?? -1
+  const indicatorTabs = externalDropInsertionIndex === null ? remainingTabs : surface.tabs
+  const dropBeforeTabId = shownInsertionIndex >= 0 && shownInsertionIndex < indicatorTabs.length
+    ? indicatorTabs[shownInsertionIndex].id
     : null
-  const dropAfterTabId = dropBoundaryIndex === surface.tabs.length && surface.tabs.length > 0
-    ? surface.tabs[surface.tabs.length - 1].id
+  const dropAfterTabId = shownInsertionIndex === indicatorTabs.length && indicatorTabs.length > 0
+    ? indicatorTabs[indicatorTabs.length - 1].id
     : null
 
   return (
     <div className="surface-workspace">
-      <div ref={tabStripRef} className="surface-tabs" role="tablist" aria-label="Surface tabs">
+      <div ref={element=>{ tabStripRef.current = element; registerTabStrip(element) }} className="surface-tabs" role="tablist" aria-label="Surface tabs">
         {surface.tabs.map(tab=>{
           const active = tab.id === surface.activeTabId
-          const selected = (surface.selectedTabIds ?? [surface.activeTabId]).includes(tab.id)
+          const selected = surface.selectedTabIds.includes(tab.id)
           const path = tab.target.type === 'item' ? tab.target.path.join('/') : null
           const dirty = path !== null && dirtyTabs[tab.id]?.path === path && dirtyTabs[tab.id].dirty
           const label = tabLabel(tab, dirty)
@@ -305,7 +334,7 @@ export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, ma
           const tabClasses = ['surface-tab']
           if(active) tabClasses.push('active')
           if(selected) tabClasses.push('selected')
-          if(tabDrag?.tabId === tab.id) tabClasses.push('dragging')
+          if(tabDrag?.tabIds.includes(tab.id)) tabClasses.push('dragging')
           if(dropBeforeTabId === tab.id) tabClasses.push('drop-before')
           if(dropAfterTabId === tab.id) tabClasses.push('drop-after')
           return (
@@ -313,6 +342,7 @@ export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, ma
               key={tab.id}
               ref={element=>{ if(element) tabElementsRef.current.set(tab.id, element); else tabElementsRef.current.delete(tab.id) }}
               className={tabClasses.join(' ')}
+              data-surface-tab-id={tab.id}
               role="tab"
               aria-selected={active}
               onPointerDown={event=>startTabDrag(tab.id, event)}
@@ -363,7 +393,8 @@ export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, ma
             : [...tab.history, ...tab.future].reverse().find(candidate=>candidate.type !== 'empty' && candidate.appId === 'files')
           const FilesComp = filesTarget ? findApp('files')?.component : undefined
           const TextComp = findApp('text-viewer')?.component
-          const editorSessions = editorSessionsRef.current[tab.id] ?? []
+          const runtime = getTabRuntime(tab.id)
+          const editorSessions = runtime.editorSessions
           const showingEditorPath = target.type === 'item' && target.appId === 'text-viewer' ? target.path : null
           let content: React.ReactNode
 
@@ -388,7 +419,7 @@ export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, ma
             <div key={tab.id} className="surface-tab-panel" role="tabpanel" hidden={!active}>
               {FilesComp && filesTarget && (
                 <div className="surface-target-panel" hidden={!showingFiles}>
-                  <FilesComp vfs={vfs} initialPath={filesInitialPath} active={surfaceActive && active && showingFiles} onOpenItem={(path: string[], item: VEntry)=>onOpenItem(tab.id, path, item)} onCreateTextFile={onCreateTextFile} onCreateFolder={onCreateFolder} onRenameItem={onRenameItem} onDeleteItem={onDeleteItem} pathMigration={pathMigration} onPathChange={(path: string[])=>{ if(showingFiles) onDirectoryChange(tab.id, path) }} />
+                  <FilesComp vfs={vfs} initialPath={filesInitialPath} initialSession={runtime.filesSession} onSessionChange={(session: FilesSessionState)=>{ runtime.filesSession = session }} active={surfaceActive && active && showingFiles} onOpenItem={(path: string[], item: VEntry)=>onOpenItem(tab.id, path, item)} onCreateTextFile={onCreateTextFile} onCreateFolder={onCreateFolder} onRenameItem={onRenameItem} onDeleteItem={onDeleteItem} pathMigration={pathMigration} onPathChange={(path: string[])=>{ if(showingFiles) onDirectoryChange(tab.id, path) }} />
                 </div>
               )}
               {TextComp && editorSessions.map(session=>{
@@ -401,6 +432,8 @@ export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, ma
                       initialItemPath={session.path}
                       pathMigration={pathMigration}
                       active={surfaceActive && active && showingEditor}
+                      initialDraft={runtime.editorDrafts[path]}
+                      onDraftChange={(draft: string)=>{ runtime.editorDrafts[path] = draft }}
                       onSave={onSaveItem}
                       onBack={showingEditor && tab.history.length > 0 ? ()=>onBack(tab.id) : undefined}
                       onDirtyChange={(dirty: boolean)=>{

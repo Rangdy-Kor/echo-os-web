@@ -9,6 +9,8 @@ type Props = {
   onDirtyChange?: (dirty: boolean) => void
   onBack?: () => void
   active?: boolean
+  initialDraft?: string
+  onDraftChange?: (draft: string) => void
 }
 
 function pathsMatch(a: string[], b: string[]){
@@ -21,11 +23,11 @@ function migratePath(path: string[], migration: NonNullable<Props['pathMigration
     : path
 }
 
-export default function TextViewerApp({ vfs, initialItemPath = [], pathMigration, onSave, onDirtyChange, onBack, active = true }: Props){
+export default function TextViewerApp({ vfs, initialItemPath = [], pathMigration, onSave, onDirtyChange, onBack, active = true, initialDraft, onDraftChange }: Props){
   const itemPath = initialItemPath.join('/')
   const item = findEntry(initialItemPath, vfs)
   const savedContent = item?.type === 'file' ? item.content ?? '' : ''
-  const [draft, setDraft] = useState(savedContent)
+  const [draft, setDraft] = useState(initialDraft ?? savedContent)
   const editorRef = useRef<HTMLTextAreaElement | null>(null)
   const previousItemPathRef = useRef(initialItemPath)
   const previousSavedContentRef = useRef(savedContent)
@@ -43,6 +45,8 @@ export default function TextViewerApp({ vfs, initialItemPath = [], pathMigration
   },[itemPath, savedContent, pathMigration?.id])
 
   const dirty = item?.type === 'file' && draft !== savedContent
+
+  useEffect(()=>onDraftChange?.(draft),[draft])
 
   useEffect(()=>{
     onDirtyChange?.(dirty)

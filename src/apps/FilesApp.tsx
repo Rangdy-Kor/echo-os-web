@@ -2,6 +2,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { findEntry, getExistingRenameCandidate, getRenameSelectionEnd, VEntry } from '../vfs/vfs'
 
 type PathMigration = { id: number; oldPath: string[]; newPath: string[] }
+export type FilesSessionState = { cwd: string[]; backStack: string[][]; forwardStack: string[][]; selected: string | null }
 
 type Props = {
   vfs: VEntry
@@ -16,6 +17,8 @@ type Props = {
   windowId?: string
   onTitleChange?: (windowId: string, title: string) => void
   onPathChange?: (path: string[]) => void
+  initialSession?: FilesSessionState
+  onSessionChange?: (session: FilesSessionState) => void
 }
 
 type ContextMenuState = { clientX: number; clientY: number; entryName?: string }
@@ -32,8 +35,8 @@ function pathsMatch(a: string[], b: string[]){
   return a.length === b.length && a.every((part, index)=>part === b[index])
 }
 
-export default function FilesApp({ vfs, initialPath = [], onOpenItem, onCreateTextFile, onCreateFolder, onRenameItem, onDeleteItem, pathMigration, active = true, windowId, onTitleChange, onPathChange }: Props){
-  const [cwd, setCwd] = useState<string[]>(() => initialPath.slice())
+export default function FilesApp({ vfs, initialPath = [], onOpenItem, onCreateTextFile, onCreateFolder, onRenameItem, onDeleteItem, pathMigration, active = true, windowId, onTitleChange, onPathChange, initialSession, onSessionChange }: Props){
+  const [cwd, setCwd] = useState<string[]>(() => initialSession?.cwd.slice() ?? initialPath.slice())
   const cwdRef = useRef<string[]>(cwd)
   const rootRef = useRef<HTMLDivElement | null>(null)
   const contextMenuRef = useRef<HTMLDivElement | null>(null)
@@ -41,15 +44,16 @@ export default function FilesApp({ vfs, initialPath = [], onOpenItem, onCreateTe
   const renameMeasureRef = useRef<HTMLSpanElement | null>(null)
   const renameCancelledRef = useRef(false)
   const wasActiveRef = useRef(active)
-  const [backStack, setBackStack] = useState<string[][]>([])
-  const [forwardStack, setForwardStack] = useState<string[][]>([])
-  const [selected, setSelected] = useState<string | null>(null)
+  const [backStack, setBackStack] = useState<string[][]>(()=>initialSession?.backStack.map(path=>path.slice()) ?? [])
+  const [forwardStack, setForwardStack] = useState<string[][]>(()=>initialSession?.forwardStack.map(path=>path.slice()) ?? [])
+  const [selected, setSelected] = useState<string | null>(initialSession?.selected ?? null)
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null)
   const [contextMenuPosition, setContextMenuPosition] = useState<ContextMenuPosition | null>(null)
   const [renaming, setRenaming] = useState<RenameState | null>(null)
   const [renameInputWidth, setRenameInputWidth] = useState(96)
 
   useEffect(() => { cwdRef.current = cwd }, [cwd])
+  useEffect(()=>onSessionChange?.({ cwd, backStack, forwardStack, selected }),[cwd, backStack, forwardStack, selected])
   useEffect(()=>{
     if(active && !wasActiveRef.current && !pathsMatch(cwdRef.current, initialPath)){
       setCwd(initialPath.slice())
