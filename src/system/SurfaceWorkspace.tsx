@@ -37,7 +37,9 @@ export type SurfaceTabRuntime = {
   filesSession?: FilesSessionState
 }
 
-type ExternalDropTarget = { windowId: string; insertionIndex: number }
+type DropDestination =
+  | { type: 'surface'; windowId: string; insertionIndex: number }
+  | { type: 'desktop'; clientX: number; clientY: number }
 
 type Props = {
   surface: SurfaceState
@@ -58,10 +60,12 @@ type Props = {
   onDirectoryChange: (tabId: string, path: string[]) => void
   onAddTab: () => void
   onSelectTab: (tabId: string, mode: 'normal' | 'toggle' | 'range') => void
+  onFocusSurface: () => void
   onCloseTab: (tabId: string) => void
   onReorderTabs: (tabIds: string[], insertionIndex: number) => void
   onTransferTabs: (tabIds: string[], grabbedTabId: string, targetWindowId: string, insertionIndex: number) => void
-  onFindExternalDropTarget: (clientX: number, clientY: number) => ExternalDropTarget | null
+  onDetachTabs: (tabIds: string[], grabbedTabId: string, clientX: number, clientY: number) => void
+  onFindDropDestination: (clientX: number, clientY: number) => DropDestination | null
   onDragEnd: () => void
   registerTabStrip: (element: HTMLDivElement | null) => void
   externalDropInsertionIndex: number | null
@@ -84,7 +88,7 @@ function migrateSessionPath(path: string[], migration: NonNullable<Props['pathMi
     : path
 }
 
-export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, maxRecent, active: surfaceActive, onExecute, onOpenItem, onCreateTextFile, onCreateFolder, onRenameItem, onDeleteItem, pathMigration, onSaveItem, onDirectoryChange, onAddTab, onSelectTab, onCloseTab, onReorderTabs, onTransferTabs, onFindExternalDropTarget, onDragEnd, registerTabStrip, externalDropInsertionIndex, getTabRuntime, onBack }: Props){
+export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, maxRecent, active: surfaceActive, onExecute, onOpenItem, onCreateTextFile, onCreateFolder, onRenameItem, onDeleteItem, pathMigration, onSaveItem, onDirectoryChange, onAddTab, onSelectTab, onFocusSurface, onCloseTab, onReorderTabs, onTransferTabs, onDetachTabs, onFindDropDestination, onDragEnd, registerTabStrip, externalDropInsertionIndex, getTabRuntime, onBack }: Props){
   const [dirtyTabs, setDirtyTabs] = useState<Record<string, { path: string; dirty: boolean }>>({})
   const [renamingTab, setRenamingTab] = useState<{ tabId: string; originalName: string; draft: string } | null>(null)
   const [tabDrag, setTabDrag] = useState<{ tabIds: string[]; insertionIndex: number } | null>(null)
@@ -189,7 +193,7 @@ export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, ma
       : [tabId]
     let dragging = false
     let insertionIndex: number | null = null
-    let externalTarget: ExternalDropTarget | null = null
+    let dropDestination: DropDestination | null = null
     let ghost: HTMLElement | null = null
     let grabOffsetX = 0
     let grabOffsetY = 0
@@ -240,7 +244,8 @@ export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, ma
       if(!dragging) return
       suppressClickTabRef.current = tabId
       if(!commit) return
-      if(externalTarget) onTransferTabs(draggedTabIds, tabId, externalTarget.windowId, externalTarget.insertionIndex)
+      if(dropDestination?.type === 'surface') onTransferTabs(draggedTabIds, tabId, dropDestination.windowId, dropDestination.insertionIndex)
+      else if(dropDestination?.type === 'desktop') onDetachTabs(draggedTabIds, tabId, dropDestination.clientX, dropDestination.clientY)
       else if(insertionIndex !== null) onReorderTabs(draggedTabIds, insertionIndex)
     }
 
@@ -263,13 +268,13 @@ export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, ma
         && moveEvent.clientY >= stripRect.top && moveEvent.clientY <= stripRect.bottom
       if(!insideStrip){
         insertionIndex = null
-        externalTarget = onFindExternalDropTarget(moveEvent.clientX, moveEvent.clientY)
+        dropDestination = onFindDropDestination(moveEvent.clientX, moveEvent.clientY)
         setTabDrag({ tabIds: draggedTabIds, insertionIndex: -1 })
         return
       }
 
-      externalTarget = null
-      onFindExternalDropTarget(-1, -1)
+      dropDestination = null
+      onFindDropDestination(-1, -1)
       const draggedIds = new Set(draggedTabIds)
       const otherTabs = surface.tabs.filter(tab=>!draggedIds.has(tab.id))
       insertionIndex = otherTabs.reduce((index, tab)=>{
@@ -299,6 +304,7 @@ export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, ma
       suppressClickTabRef.current = null
       return
     }
+    onFocusSurface()
     onSelectTab(tabId, event.shiftKey ? 'range' : event.ctrlKey ? 'toggle' : 'normal')
   }
 
@@ -346,7 +352,11 @@ export default function SurfaceWorkspace({ surface, apps, vfs, items, recent, ma
               role="tab"
               aria-selected={active}
               onPointerDown={event=>startTabDrag(tab.id, event)}
-              onMouseDown={event=>{ if(event.button === 1) event.preventDefault() }}
+              onMouseDown={event=>{
+                if((event.target as Element).closest('button, input')) return
+                event.stopPropagation()
+                if(event.button === 1) event.preventDefault()
+              }}
               onAuxClick={event=>closeTabWithMiddleClick(tab.id, event)}
               onClick={event=>activateTab(tab.id, event)}
             >

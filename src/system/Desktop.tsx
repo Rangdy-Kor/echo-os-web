@@ -17,6 +17,21 @@ function createEmptyTab(): SurfaceTab{
   return { id: `tab-${nextTabId++}`, target: { type: 'empty' }, history: [], future: [] }
 }
 
+function removeTabsFromSurface(surface: SurfaceState, movingIds: Set<string>){
+  const firstMovingIndex = surface.tabs.findIndex(tab=>movingIds.has(tab.id))
+  const tabs = surface.tabs.filter(tab=>!movingIds.has(tab.id))
+  if(tabs.length === 0) return null
+  return {
+    ...surface,
+    tabs,
+    activeTabId: movingIds.has(surface.activeTabId)
+      ? tabs[Math.min(Math.max(firstMovingIndex, 0), tabs.length - 1)].id
+      : surface.activeTabId,
+    selectedTabIds: surface.selectedTabIds.filter(id=>!movingIds.has(id)),
+    selectionAnchorTabId: surface.selectionAnchorTabId && movingIds.has(surface.selectionAnchorTabId) ? null : surface.selectionAnchorTabId,
+  }
+}
+
 function targetsMatch(a: TabTarget, b: TabTarget){
   if(a.type !== b.type) return false
   if(a.type === 'empty' || b.type === 'empty') return true
@@ -127,17 +142,24 @@ export default function Desktop(){
     return runtime
   }
 
-  function openSurface(){
+  function createSurfaceWindow(position?: { clientX: number; clientY: number }){
     const width = 520
     const height = 400
     const taskbarHeight = 48
     const windowId = wm.openGeneric('Surface', { minH: 160 })
     wm.setSize(windowId, width, height)
+    const x = position ? position.clientX - 80 : (window.innerWidth - width) / 2
+    const y = position ? position.clientY - 56 : (window.innerHeight - taskbarHeight - height) / 2
     wm.setPos(
       windowId,
-      Math.max(0, Math.round((window.innerWidth - width) / 2)),
-      Math.max(0, Math.round((window.innerHeight - taskbarHeight - height) / 2)),
+      Math.max(0, Math.min(Math.round(x), window.innerWidth - width)),
+      Math.max(0, Math.min(Math.round(y), window.innerHeight - taskbarHeight - height)),
     )
+    return windowId
+  }
+
+  function openSurface(){
+    const windowId = createSurfaceWindow()
     const tab = createEmptyTab()
     setSurfaces(current=>[...current, { windowId, tabs: [tab], activeTabId: tab.id, selectedTabIds: [], selectionAnchorTabId: null }])
   }
@@ -408,7 +430,7 @@ export default function Desktop(){
     }))
   }
 
-  function findExternalTabDropTarget(sourceWindowId: string, clientX: number, clientY: number){
+  function findTabDropDestination(sourceWindowId: string, clientX: number, clientY: number){
     let result: { windowId: string; insertionIndex: number } | null = null
     const hitElements = clientX >= 0 && clientY >= 0 ? document.elementsFromPoint(clientX, clientY) : []
     for(const [windowId, strip] of tabStripRefs.current){
@@ -425,7 +447,10 @@ export default function Desktop(){
       break
     }
     setExternalTabDrop(current=>current?.windowId === result?.windowId && current?.insertionIndex === result?.insertionIndex ? current : result)
-    return result
+    if(result) return { type: 'surface' as const, ...result }
+    return hitElements[0] === wallpaperRef.current
+      ? { type: 'desktop' as const, clientX, clientY }
+      : null
   }
 
   function transferTabs(sourceWindowId: string, targetWindowId: string, tabIds: string[], grabbedTabId: string, insertionIndex: number){
@@ -438,22 +463,13 @@ export default function Desktop(){
       const movingTabs = source.tabs.filter(tab=>movingIds.has(tab.id))
       if(movingTabs.length === 0 || !movingIds.has(grabbedTabId)) return current
 
-      const firstMovingIndex = source.tabs.findIndex(tab=>movingIds.has(tab.id))
-      const sourceRemaining = source.tabs.filter(tab=>!movingIds.has(tab.id))
-      const sourceTabs = sourceRemaining.length > 0 ? sourceRemaining : [createEmptyTab()]
-      const sourceActiveTabId = movingIds.has(source.activeTabId)
-        ? sourceTabs[Math.min(firstMovingIndex, sourceTabs.length - 1)].id
-        : source.activeTabId
       const nextIndex = Math.max(0, Math.min(insertionIndex, target.tabs.length))
       const targetTabs = [...target.tabs.slice(0, nextIndex), ...movingTabs, ...target.tabs.slice(nextIndex)]
 
-      return current.map(surface=>{
-        if(surface.windowId === sourceWindowId) return {
-          ...surface,
-          tabs: sourceTabs,
-          activeTabId: sourceActiveTabId,
-          selectedTabIds: surface.selectedTabIds.filter(id=>!movingIds.has(id)),
-          selectionAnchorTabId: surface.selectionAnchorTabId && movingIds.has(surface.selectionAnchorTabId) ? null : surface.selectionAnchorTabId,
+      return current.flatMap(surface=>{
+        if(surface.windowId === sourceWindowId){
+          const nextSource = removeTabsFromSurface(surface, movingIds)
+          return nextSource ? [nextSource] : []
         }
         if(surface.windowId === targetWindowId) return {
           ...surface,
@@ -462,10 +478,38 @@ export default function Desktop(){
           selectedTabIds: movingTabs.map(tab=>tab.id),
           selectionAnchorTabId: grabbedTabId,
         }
-        return surface
+        return [surface]
       })
     })
+    const source = surfaces.find(surface=>surface.windowId === sourceWindowId)
+    if(source && source.tabs.every(tab=>tabIds.includes(tab.id))) closeWindow(sourceWindowId, new Set(tabIds))
     wm.focus(targetWindowId)
+  }
+
+  function detachTabs(sourceWindowId: string, tabIds: string[], grabbedTabId: string, clientX: number, clientY: number){
+    const source = surfaces.find(surface=>surface.windowId === sourceWindowId)
+    if(!source) return
+    const movingIds = new Set(tabIds)
+    const movingTabs = source.tabs.filter(tab=>movingIds.has(tab.id))
+    if(movingTabs.length === 0 || !movingIds.has(grabbedTabId)) return
+
+    const windowId = createSurfaceWindow({ clientX, clientY })
+    setSurfaces(current=>[
+      ...current.flatMap(surface=>{
+        if(surface.windowId !== sourceWindowId) return [surface]
+        const nextSource = removeTabsFromSurface(surface, movingIds)
+        return nextSource ? [nextSource] : []
+      }),
+      {
+        windowId,
+        tabs: movingTabs,
+        activeTabId: grabbedTabId,
+        selectedTabIds: movingTabs.map(tab=>tab.id),
+        selectionAnchorTabId: grabbedTabId,
+      },
+    ])
+    if(source.tabs.every(tab=>movingIds.has(tab.id))) closeWindow(sourceWindowId, movingIds)
+    wm.focus(windowId)
   }
 
   function goBackInTab(windowId: string, tabId: string){
@@ -499,15 +543,17 @@ export default function Desktop(){
   }
 
   function closeTab(windowId: string, tabId: string){
+    const surface = surfaces.find(candidate=>candidate.windowId === windowId)
+    if(surface?.tabs.length === 1 && surface.tabs[0].id === tabId){
+      closeWindow(windowId)
+      return
+    }
     tabRuntimeRef.current.delete(tabId)
     setSurfaces(current=>current.map(surface=>{
       if(surface.windowId !== windowId) return surface
       const closingIndex = surface.tabs.findIndex(tab=>tab.id === tabId)
       const remaining = surface.tabs.filter(tab=>tab.id !== tabId)
-      if(remaining.length === 0){
-        const emptyTab = createEmptyTab()
-        return { ...surface, tabs: [emptyTab], activeTabId: emptyTab.id, selectedTabIds: [], selectionAnchorTabId: null }
-      }
+      if(remaining.length === 0) return surface
       const remainingSelected = surface.selectedTabIds.filter(id=>id !== tabId)
       const selectionAnchorTabId = surface.selectionAnchorTabId === tabId ? null : surface.selectionAnchorTabId
       if(surface.activeTabId !== tabId){
@@ -537,9 +583,11 @@ export default function Desktop(){
     syncTabTarget(windowId, tabId, target)
   }
 
-  function closeWindow(id: string){
+  function closeWindow(id: string, preserveTabIds: ReadonlySet<string> = new Set()){
     const closingSurface = surfaces.find(surface=>surface.windowId === id)
-    closingSurface?.tabs.forEach(tab=>tabRuntimeRef.current.delete(tab.id))
+    closingSurface?.tabs.forEach(tab=>{
+      if(!preserveTabIds.has(tab.id)) tabRuntimeRef.current.delete(tab.id)
+    })
     tabStripRefs.current.delete(id)
     setSurfaces(current=>current.filter(surface=>surface.windowId !== id))
     wm.close(id)
@@ -615,10 +663,12 @@ export default function Desktop(){
                       onDirectoryChange={(tabId, path)=>updateDirectoryTarget(w.id, tabId, path)}
                       onAddTab={()=>addTab(w.id)}
                       onSelectTab={(tabId, mode)=>selectTab(w.id, tabId, mode)}
+                      onFocusSurface={()=>wm.focus(w.id)}
                       onCloseTab={tabId=>closeTab(w.id, tabId)}
                       onReorderTabs={(tabIds, insertionIndex)=>reorderTabs(w.id, tabIds, insertionIndex)}
                       onTransferTabs={(tabIds, grabbedTabId, targetWindowId, insertionIndex)=>transferTabs(w.id, targetWindowId, tabIds, grabbedTabId, insertionIndex)}
-                      onFindExternalDropTarget={(clientX, clientY)=>findExternalTabDropTarget(w.id, clientX, clientY)}
+                      onDetachTabs={(tabIds, grabbedTabId, clientX, clientY)=>detachTabs(w.id, tabIds, grabbedTabId, clientX, clientY)}
+                      onFindDropDestination={(clientX, clientY)=>findTabDropDestination(w.id, clientX, clientY)}
                       onDragEnd={()=>setExternalTabDrop(null)}
                       registerTabStrip={element=>{
                         if(element) tabStripRefs.current.set(w.id, element)
